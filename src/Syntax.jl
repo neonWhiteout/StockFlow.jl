@@ -852,3 +852,120 @@ function set_final_binop_varname!(exprs::Vector{Tuple{Symbol,Expr}}, varname::Sy
     exprs[idx] = (varname, expr)
 end
 end
+
+
+
+
+macro open_feet(stockflow, block)
+   Base.remove_linenums!(block)
+   feet::Vector{StockAndFlow0} = parse_open_feet_syntax(block.args)
+   return Open(eval(stockflow), feet...)
+end
+
+    
+
+
+function parse_open_feet_syntax(statements::Vector{Any})
+    # stockflows::Vector{Union{StockAndFlowStructure,StockAndFlow,StockAndFlowF}} = [] # should only be 1
+    feet::Vector{StockAndFlow0} = []
+    current_phase = (_,_) -> ()
+    for statement in statements
+        @match statement begin
+            # QuoteNode(:sf) => begin
+            #     current_phase = sf -> parse_stockflow!(stockflows, sf)
+            # end
+            QuoteNode(:feet) => begin
+                current_phase = fe -> parse_foot!(feet, fe)
+            end
+            QuoteNode(kw) =>
+                 throw("Unknown block type for open feet syntax: " * String(kw))
+            _ => current_phase(statement)
+        end
+    end
+    # TODO: We only want there to be one stock and flow, right?
+    # s = OpenFeetBlock(first(stockflows), feet)
+    return feet
+    # return s 
+end
+
+# struct OpenFeetBlock
+#     stockflow::Union{StockAndFlowStructure,StockAndFlow,StockAndFlowF}
+#     feet::Vector{StockAndFlow0}
+# end
+
+
+# function parse_stockflow!(stockflows::Vector{Union{StockAndFlowStructure,StockAndFlow,StockAndFlowF}}, stockflow::Symbol) #TODO: Confirm stockflow should be a symbol rather than an Expr
+#     push!(stockflows, eval(stockflow)) #TODO: Confirm if this is the correct way to do this
+#     # In Python, it was drilled into my head that eval is evil; not sure if this extends to Julia
+# end
+
+function parse_foot!(feet::Vector{StockAndFlow0}, fo::Expr)
+    println(fo)
+    @match fo begin
+        :($f1 => $f2) => begin
+            println(f1)
+            println(f2)
+            println(:f1)
+            println(:f2)
+            push!(feet, foot(Symbol(f1), Symbol(f2), Symbol(f1) => Symbol(f2)))
+        end
+        _ => println("Fail!")
+    end
+end
+
+        # Expr(c, _, _) || Expr(c, _, _, _) =>
+        # throw("Unhandled expression in foot definition " * String(c))
+    
+
+# macro stock_and_flow_feet(block)
+#     Base.remove_linenums!(block)
+#     syntax_lines = parse_stock_and_flow_syntax(block.args)
+#     saff_args = stock_and_flow_syntax_to_arguments(syntax_lines)
+#     return Open(
+#         saff_args.stocks,
+#         saff_args.params,
+#         saff_args.dyvars,
+#         saff_args.flows,
+#         saff_args.sums,
+#     )
+# end
+
+
+# function parse_stock_and_flow_feet_syntax(statements::Vector{Any})
+#     stocks::Vector{Symbol} = []
+#     params::Vector{Symbol} = []
+#     dyvars::Vector{Tuple{Symbol,Expr}} = []
+#     flows::Vector{Tuple{Symbol,Expr,Symbol}} = []
+#     sums::Vector{Tuple{Symbol,Vector{Symbol}}} = []
+#     feet::Vector{Tuple{Symbol, Symbol}} = []
+#     current_phase = (_, _) -> ()
+#     for statement in statements
+#         @match statement begin
+#             QuoteNode(:stocks) => begin
+#                 current_phase = s -> parse_stock!(stocks, s)
+#             end
+#             QuoteNode(:parameters) => begin
+#                 current_phase = p -> parse_param!(params, p)
+#             end
+#             QuoteNode(:dynamic_variables) => begin
+#                 current_phase = d -> parse_dyvar!(dyvars, d)
+#             end
+#             QuoteNode(:flows) => begin
+#                 current_phase = f -> parse_flow!(flows, f)
+#             end
+#             QuoteNode(:sums) => begin
+#                 current_phase = s -> parse_sum!(sums, s)
+#             end
+#             QuoteNode(:feet) => begin
+#                 # current_phase = fe -> parse_feet!(feet, fe)
+#             end
+#             QuoteNode(kw) =>
+#                 throw("Unknown block type for Stock and Flow syntax: " * String(kw))
+#             _ => current_phase(statement)
+#         end
+#     end
+
+#     s = StockAndFlowBlock(stocks, params, dyvars, flows, sums)
+#     # leg = 
+#     return s
+# end
