@@ -91,7 +91,7 @@ SIR_3 = @stock_and_flow begin
     :flows
     S => inf(S * v_forceOfInfection) => I
     ☁ => births(totalPopulation * alpha) => S
-    S => deathsS(S * omega) => ☁
+    S => deathsS(S * omega) => ☁foo
     I => rec(I / tRec) => R
     I => deathsI(I * omega) => ☁
     R => deathsR(R * omega) => ☁
@@ -102,11 +102,19 @@ SIR_3 = @stock_and_flow begin
 end
 ```
 """
+
+
 module Syntax
-export @stock_and_flow
+
+using MLStyle
+
+
+export @stock_and_flow, @open_feet
 
 using StockFlow
-using MLStyle
+
+SYMBOL_NO_OPERATION = :IDENTITY
+
 
 """
     stock_and_flow(block :: Expr)
@@ -171,7 +179,7 @@ Contains the elements that make up the Stock and Flow block syntax.
 struct StockAndFlowBlock
     stocks::Vector{Symbol}
     params::Vector{Symbol}
-    dyvars::Vector{Tuple{Symbol,Expr}}
+    dyvars::Vector{Tuple{Symbol,Union{Expr, Symbol}}}
     flows::Vector{Tuple{Symbol,Expr,Symbol}}
     sums::Vector{Tuple{Symbol,Vector{Symbol}}}
 end
@@ -194,7 +202,7 @@ struct StockAndFlowArguments
         },
     }
     params::Vector{Symbol}
-    dyvars::Vector{Pair{Symbol,Pair{Tuple{Symbol,Symbol},Symbol}}}
+    dyvars::Vector{Pair{Symbol,Pair{Union{Tuple{Symbol,Symbol}, Symbol},Symbol}}} 
     flows::Vector{Pair{Symbol,Symbol}}
     sums::Vector{Symbol}
 end
@@ -216,7 +224,7 @@ a Stock and Flow model: stocks, parameters, dynamic variables, flows, and sums.
 function parse_stock_and_flow_syntax(statements::Vector{Any})
     stocks::Vector{Symbol} = []
     params::Vector{Symbol} = []
-    dyvars::Vector{Tuple{Symbol,Expr}} = []
+    dyvars::Vector{Tuple{Symbol,Union{Expr, Symbol}}} = [] 
     flows::Vector{Tuple{Symbol,Expr,Symbol}} = []
     sums::Vector{Tuple{Symbol,Vector{Symbol}}} = []
     current_phase = (_, _) -> ()
@@ -327,9 +335,10 @@ Extract the dynamic variable name and defining expression from a Julia expressio
 ### Output
 None. This mutates the given dyvars vector.
 """
-function parse_dyvar!(dyvars::Vector{Tuple{Symbol,Expr}}, dyvar::Expr)
+function parse_dyvar!(dyvars::Vector{Tuple{Symbol,Union{Expr, Symbol}}}, dyvar::Union{Expr, Symbol}) #modified to work with single dyvars without equations
     @match dyvar begin
         :($dyvar_name = $dyvar_def) => push!(dyvars, (dyvar_name, dyvar_def))
+        # :($dyvar_name) => push!(dyvars, dyvar_name)
         Expr(c, _, _) || Expr(c, _, _, _) =>
             throw("Unhandled expression in dynamic variable definition " * String(c))
     end
@@ -511,10 +520,12 @@ into a form suitable for input into the StockAndFlowF data type:
 ### Output
 A vector of dynamic variable definitions suitable for input to StockAndFlowF.
 """
-function dyvar_exprs_to_symbolic_repr(dyvars::Vector{Tuple{Symbol,Expr}})
-    syms::Vector{Pair{Symbol,Pair{Tuple{Symbol,Symbol},Symbol}}} = []
+function dyvar_exprs_to_symbolic_repr(dyvars::Vector{Tuple{Symbol,Union{Expr, Symbol}}})
+    syms::Vector{Pair{Symbol,Pair{Union{Tuple{Symbol,Symbol}, Symbol},Symbol}}} = []
     for (dyvar_name, dyvar_definition) in dyvars
-        if is_binop(dyvar_definition)
+        if isa(dyvar_definition, Symbol)
+            push!(syms, (dyvar_name => (dyvar_definition => SYMBOL_NO_OPERATION)))
+        elseif is_binop(dyvar_definition)
             @match dyvar_definition begin
                 Expr(:call, op, a, b) => begin
                     push!(syms, (dyvar_name => ((a, b) => op)))
@@ -525,10 +536,11 @@ function dyvar_exprs_to_symbolic_repr(dyvars::Vector{Tuple{Symbol,Expr}})
             end
         else
             (binops, _) =
-                infix_expression_to_binops(dyvar_definition, finalsym=dyvar_name, gensymbase=generate_dyvar_name(dyvar_name))
+            infix_expression_to_binops(dyvar_definition, finalsym=dyvar_name, gensymbase=generate_dyvar_name(dyvar_name))
             binops_syms = dyvar_exprs_to_symbolic_repr(binops)
             syms = vcat(syms, binops_syms)
         end
+            
     end
     return syms
 end
@@ -840,7 +852,7 @@ julia> binops
 
 julia> Syntax.set_final_binop_varname!(binops, :infectionRate)
 
-julia> binops
+julia> binopsop
 2-element Vector{Tuple{Symbol, Expr}}:
  (Symbol("###1415"), :(a + b))
  (:infectionRate, :(var"###1415" + c))
@@ -851,121 +863,7 @@ function set_final_binop_varname!(exprs::Vector{Tuple{Symbol,Expr}}, varname::Sy
     (_oldvarname, expr) = last(exprs)
     exprs[idx] = (varname, expr)
 end
+
+
+
 end
-
-
-
-
-macro open_feet(stockflow, block)
-   Base.remove_linenums!(block)
-   feet::Vector{StockAndFlow0} = parse_open_feet_syntax(block.args)
-   return Open(eval(stockflow), feet...)
-end
-
-    
-
-
-function parse_open_feet_syntax(statements::Vector{Any})
-    # stockflows::Vector{Union{StockAndFlowStructure,StockAndFlow,StockAndFlowF}} = [] # should only be 1
-    feet::Vector{StockAndFlow0} = []
-    current_phase = (_,_) -> ()
-    for statement in statements
-        @match statement begin
-            # QuoteNode(:sf) => begin
-            #     current_phase = sf -> parse_stockflow!(stockflows, sf)
-            # end
-            QuoteNode(:feet) => begin
-                current_phase = fe -> parse_foot!(feet, fe)
-            end
-            QuoteNode(kw) =>
-                 throw("Unknown block type for open feet syntax: " * String(kw))
-            _ => current_phase(statement)
-        end
-    end
-    # TODO: We only want there to be one stock and flow, right?
-    # s = OpenFeetBlock(first(stockflows), feet)
-    return feet
-    # return s 
-end
-
-# struct OpenFeetBlock
-#     stockflow::Union{StockAndFlowStructure,StockAndFlow,StockAndFlowF}
-#     feet::Vector{StockAndFlow0}
-# end
-
-
-# function parse_stockflow!(stockflows::Vector{Union{StockAndFlowStructure,StockAndFlow,StockAndFlowF}}, stockflow::Symbol) #TODO: Confirm stockflow should be a symbol rather than an Expr
-#     push!(stockflows, eval(stockflow)) #TODO: Confirm if this is the correct way to do this
-#     # In Python, it was drilled into my head that eval is evil; not sure if this extends to Julia
-# end
-
-function parse_foot!(feet::Vector{StockAndFlow0}, fo::Expr)
-    println(fo)
-    @match fo begin
-        :($f1 => $f2) => begin
-            println(f1)
-            println(f2)
-            println(:f1)
-            println(:f2)
-            push!(feet, foot(Symbol(f1), Symbol(f2), Symbol(f1) => Symbol(f2)))
-        end
-        _ => println("Fail!")
-    end
-end
-
-        # Expr(c, _, _) || Expr(c, _, _, _) =>
-        # throw("Unhandled expression in foot definition " * String(c))
-    
-
-# macro stock_and_flow_feet(block)
-#     Base.remove_linenums!(block)
-#     syntax_lines = parse_stock_and_flow_syntax(block.args)
-#     saff_args = stock_and_flow_syntax_to_arguments(syntax_lines)
-#     return Open(
-#         saff_args.stocks,
-#         saff_args.params,
-#         saff_args.dyvars,
-#         saff_args.flows,
-#         saff_args.sums,
-#     )
-# end
-
-
-# function parse_stock_and_flow_feet_syntax(statements::Vector{Any})
-#     stocks::Vector{Symbol} = []
-#     params::Vector{Symbol} = []
-#     dyvars::Vector{Tuple{Symbol,Expr}} = []
-#     flows::Vector{Tuple{Symbol,Expr,Symbol}} = []
-#     sums::Vector{Tuple{Symbol,Vector{Symbol}}} = []
-#     feet::Vector{Tuple{Symbol, Symbol}} = []
-#     current_phase = (_, _) -> ()
-#     for statement in statements
-#         @match statement begin
-#             QuoteNode(:stocks) => begin
-#                 current_phase = s -> parse_stock!(stocks, s)
-#             end
-#             QuoteNode(:parameters) => begin
-#                 current_phase = p -> parse_param!(params, p)
-#             end
-#             QuoteNode(:dynamic_variables) => begin
-#                 current_phase = d -> parse_dyvar!(dyvars, d)
-#             end
-#             QuoteNode(:flows) => begin
-#                 current_phase = f -> parse_flow!(flows, f)
-#             end
-#             QuoteNode(:sums) => begin
-#                 current_phase = s -> parse_sum!(sums, s)
-#             end
-#             QuoteNode(:feet) => begin
-#                 # current_phase = fe -> parse_feet!(feet, fe)
-#             end
-#             QuoteNode(kw) =>
-#                 throw("Unknown block type for Stock and Flow syntax: " * String(kw))
-#             _ => current_phase(statement)
-#         end
-#     end
-
-#     s = StockAndFlowBlock(stocks, params, dyvars, flows, sums)
-#     # leg = 
-#     return s
-# end
