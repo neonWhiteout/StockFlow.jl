@@ -91,7 +91,7 @@ SIR_3 = @stock_and_flow begin
     :flows
     S => inf(S * v_forceOfInfection) => I
     ☁ => births(totalPopulation * alpha) => S
-    S => deathsS(S * omega) => ☁foo
+    S => deathsS(S * omega) => ☁
     I => rec(I / tRec) => R
     I => deathsI(I * omega) => ☁
     R => deathsR(R * omega) => ☁
@@ -102,19 +102,11 @@ SIR_3 = @stock_and_flow begin
 end
 ```
 """
-
-
 module Syntax
-
-using MLStyle
-
-
-export @stock_and_flow, @open_feet
+export @stock_and_flow
 
 using StockFlow
-
-SYMBOL_NO_OPERATION = :IDENTITY
-
+using MLStyle
 
 """
     stock_and_flow(block :: Expr)
@@ -179,7 +171,7 @@ Contains the elements that make up the Stock and Flow block syntax.
 struct StockAndFlowBlock
     stocks::Vector{Symbol}
     params::Vector{Symbol}
-    dyvars::Vector{Tuple{Symbol,Union{Expr, Symbol}}}
+    dyvars::Vector{Tuple{Symbol,Expr}}
     flows::Vector{Tuple{Symbol,Expr,Symbol}}
     sums::Vector{Tuple{Symbol,Vector{Symbol}}}
 end
@@ -202,7 +194,8 @@ struct StockAndFlowArguments
         },
     }
     params::Vector{Symbol}
-    dyvars::Vector{Pair{Symbol,Pair{Union{Tuple{Symbol,Symbol}, Symbol},Symbol}}} 
+    dyvars::Vector{Union{Pair{Symbol,Pair{Tuple{Symbol,Symbol},Symbol}},Pair{Symbol, Pair{Symbol, Symbol}}}}
+    # dyvars::Vector{Pair{Symbol,Pair{Tuple{Symbol,Symbol},Symbol}}}
     flows::Vector{Pair{Symbol,Symbol}}
     sums::Vector{Symbol}
 end
@@ -224,7 +217,7 @@ a Stock and Flow model: stocks, parameters, dynamic variables, flows, and sums.
 function parse_stock_and_flow_syntax(statements::Vector{Any})
     stocks::Vector{Symbol} = []
     params::Vector{Symbol} = []
-    dyvars::Vector{Tuple{Symbol,Union{Expr, Symbol}}} = [] 
+    dyvars::Vector{Tuple{Symbol,Expr}} = []
     flows::Vector{Tuple{Symbol,Expr,Symbol}} = []
     sums::Vector{Tuple{Symbol,Vector{Symbol}}} = []
     current_phase = (_, _) -> ()
@@ -335,10 +328,9 @@ Extract the dynamic variable name and defining expression from a Julia expressio
 ### Output
 None. This mutates the given dyvars vector.
 """
-function parse_dyvar!(dyvars::Vector{Tuple{Symbol,Union{Expr, Symbol}}}, dyvar::Union{Expr, Symbol}) #modified to work with single dyvars without equations
+function parse_dyvar!(dyvars::Vector{Tuple{Symbol,Expr}}, dyvar::Expr)
     @match dyvar begin
         :($dyvar_name = $dyvar_def) => push!(dyvars, (dyvar_name, dyvar_def))
-        # :($dyvar_name) => push!(dyvars, dyvar_name)
         Expr(c, _, _) || Expr(c, _, _, _) =>
             throw("Unhandled expression in dynamic variable definition " * String(c))
     end
@@ -520,12 +512,13 @@ into a form suitable for input into the StockAndFlowF data type:
 ### Output
 A vector of dynamic variable definitions suitable for input to StockAndFlowF.
 """
-function dyvar_exprs_to_symbolic_repr(dyvars::Vector{Tuple{Symbol,Union{Expr, Symbol}}})
-    syms::Vector{Pair{Symbol,Pair{Union{Tuple{Symbol,Symbol}, Symbol},Symbol}}} = []
+function dyvar_exprs_to_symbolic_repr(dyvars::Vector{Tuple{Symbol,Expr}})
+    syms::Vector{Union{Pair{Symbol,Pair{Tuple{Symbol,Symbol},Symbol}}, #(w, ((x, y), z))    where x, y are in a tuple
+        Pair{Symbol, Pair{Symbol, Symbol}}} #(w, (x, y))
+    } = []
     for (dyvar_name, dyvar_definition) in dyvars
-        if isa(dyvar_definition, Symbol)
-            push!(syms, (dyvar_name => (dyvar_definition => SYMBOL_NO_OPERATION)))
-        elseif is_binop(dyvar_definition)
+
+        if is_binop(dyvar_definition)
             @match dyvar_definition begin
                 Expr(:call, op, a, b) => begin
                     push!(syms, (dyvar_name => ((a, b) => op)))
@@ -535,12 +528,17 @@ function dyvar_exprs_to_symbolic_repr(dyvars::Vector{Tuple{Symbol,Union{Expr, Sy
                 )
             end
         else
-            (binops, _) =
-            infix_expression_to_binops(dyvar_definition, finalsym=dyvar_name, gensymbase=generate_dyvar_name(dyvar_name))
-            binops_syms = dyvar_exprs_to_symbolic_repr(binops)
-            syms = vcat(syms, binops_syms)
+            @match dyvar_definition begin
+                Expr(:call, op, a) => begin
+                    push!(syms, (dyvar_name => (a => op)))
+                end
+                _ => begin 
+                    (binops, _) = infix_expression_to_binops(dyvar_definition, finalsym=dyvar_name, gensymbase=generate_dyvar_name(dyvar_name))
+                    binops_syms = dyvar_exprs_to_symbolic_repr(binops)
+                    syms = vcat(syms, binops_syms)
+                end
+            end
         end
-            
     end
     return syms
 end
@@ -852,7 +850,7 @@ julia> binops
 
 julia> Syntax.set_final_binop_varname!(binops, :infectionRate)
 
-julia> binopsop
+julia> binops
 2-element Vector{Tuple{Symbol, Expr}}:
  (Symbol("###1415"), :(a + b))
  (:infectionRate, :(var"###1415" + c))
@@ -863,7 +861,4 @@ function set_final_binop_varname!(exprs::Vector{Tuple{Symbol,Expr}}, varname::Sy
     (_oldvarname, expr) = last(exprs)
     exprs[idx] = (varname, expr)
 end
-
-
-
 end
