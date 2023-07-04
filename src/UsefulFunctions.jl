@@ -3,9 +3,9 @@ module UsefulFunctions
 using StockFlow
 using StockFlow.Syntax
 using MLStyle
+using DataStructures # new requirement maybe
 
-
-export get_link_index, generate_variable_names, infer_links
+export get_link_index, generate_variable_names, infer_links, infer_from_stocks_and_flows
 
 
 
@@ -151,7 +151,7 @@ function extract_subpart_ordered_tuple(sf, subpart::String...)
     return extract_subpart_ordered_tuple(sf, [Symbol(k) for k in subpart]) # TODO: fix lmao
 end
 
-function extract_subpart_ordered_tuple(sf, subpart::Symbol...)
+function extract_subpart_ordered_tuple(sf, subpart::Symbol...)::Vector{Vector{Any}} # usually Int64 but works with names too.  Might just be Int64 and Symbol
     if isempty(subpart)
         return []
     end
@@ -159,7 +159,9 @@ function extract_subpart_ordered_tuple(sf, subpart::Symbol...)
     subparts = [extract_subpart_ordered(sf, sp) for sp in subpart]
     # println(subparts)
     # println("HERE")
-    collected_tuples = [tuple(vec...) for vec in zip(subparts...)]
+    # collected_tuples = [tuple(vec...) for vec in zip(subparts...)]
+    collected_tuples = [collect(vec) for vec in zip(subparts...)]
+
     # println(collected_tuples)
     return collected_tuples
     # k = collect([extract_subpart_ordered(sf, sp) for sp in subpart])
@@ -190,7 +192,7 @@ function infer_links(sfsrc, sftgt, necMaps::Dict{Symbol, Vector{Int64}})
     LSV = :LSV => infer_particular_link(sfsrc, sftgt, :lsvsv => necMaps[:SV], :lsvv => necMaps[:V])
     LVV = :LVV => infer_particular_link(sfsrc, sftgt, :lvsrc => necMaps[:V], :lvtgt => necMaps[:V])
     LPV = :LPV => infer_particular_link(sfsrc, sftgt, :lpvp => necMaps[:P], :lpvv => necMaps[:V])
-
+    # could probably include vop by just giving vop as link1 and link2 arguments?
     return Dict(LS, I, O, LV, LSV, LVV, LPV)
 end
 
@@ -214,16 +216,15 @@ function infer_particular_link(sfsrc, sftgt, link1::Pair{Symbol, Vector{Int64}},
     linkname1, map1 = link1
     linkname2, map2 = link2
 
-    link_domain = extract_subpart_ordered_tuple(sfsrc, linkname1, linkname2)::Vector{Tuple{Int64, Int64}}
+    link_domain = extract_subpart_ordered_tuple(sfsrc, linkname1, linkname2) # ::Vector{Vector{Int64}} (at present, it's just Vector{Vector{Any}})
     # Corresponds to column 2 and 3 when printing the sf
     # Note, does NOT currently include position, which could lead to ambiguity
-    link_codomain = extract_subpart_ordered_tuple(sftgt, linkname1, linkname2)::Vector{Tuple{Int64, Int64}}
+    link_codomain = extract_subpart_ordered_tuple(sftgt, linkname1, linkname2) # ::Vector{Vector{Int64}}
     # link_codomain = collect(zip(extract_subpart_ordered(sftgt, linkname1), extract_subpart_ordered(sftgt, linkname2)))
 
     # link_maps = [map1, map2]
 
     inferred_links = Vector{Int64}() # points to index should map to
-
     for (i, (x1, x2)) in enumerate(link_domain) # eg, v1 is a stock, v2 is a sum variable, and they have a link.  Let's say stock A -> A′, sv N -> N′.
         # We're checking that there exists a unique link between A′ and N′.
         # We do this by grabbing all the links L in the domain and L′ in the codomain, converting L based on what its constituents map to, checking that
@@ -238,7 +239,7 @@ function infer_particular_link(sfsrc, sftgt, link1::Pair{Symbol, Vector{Int64}},
             end
         end
         # potential_values = filter(((index, (i, j)),) -> i == m1 && j == m2, [(index, (i, j)) for (index, (i,j)) in enumerate(link_codomain)])
-        @assert length(potential_values) == 1 "Didn't find one value to map ($v1, $v2) to for $linkname1, $linkname2 !  Found: $(length(potential_values))"
+        @assert length(potential_values) == 1 "Didn't find one value to map ($x1, $x2) to for $linkname1, $linkname2 !  Found: $(potential_values)"
         push!(inferred_links, potential_values[1])
     end
 
@@ -255,6 +256,217 @@ end
 
 # function infer_links(sfsrc, sftgt, necMaps::Dict{String, Vector{String}})
 # end
+
+
+# function infer_sums(sfsrc, sftgt, )
+
+# function extract_nth_mappings(sf, i, fields...)
+#     return extract_subpart_ordered_tuple(sf, fields)[i]
+# end
+
+# We're dealing with finset which means we can totally brute force everything
+# We shouldn't, but we can
+"""
+I'm not sure if this will be possible, but worth a try, I suppose.
+
+We just need to infer sums, dynamic variables and parameters, then run infer_links
+
+necMaps needs only :S => [3, 5, ...] and :F => [4, 6, 1, ...]
+"""
+function infer_from_stocks_and_flows(sfsrc, sftgt, necMaps) # TODO: Make the variable names not absolutely garbage
+    # Like bloody hell I have no idea what's going on
+    # part of that is a consequence of defining mappings between mappings but part of it is just me being dumb
+    # maybe replace instances of 'var' with 'dyvar' or 'dv'?
+
+
+    stockmaps = necMaps[:S]
+    flowmaps = necMaps[:F]
+
+
+
+
+
+
+
+
+
+
+    var_domain = 1:nvb(sfsrc) # literally just 1:n
+    var_codomain = 1:nvb(sftgt) # 1:m
+
+    flowvar_domain = extract_subpart_ordered(sfsrc, :fv)
+    flowvar_codomain = extract_subpart_ordered(sftgt, :fv)
+
+    flowvar_maps = zeros(Int64, length(var_domain)) # TODO: just use nvb instead of length
+    flowvar_reverse_maps = [Set{Int64}() for _ in var_codomain]
+
+    unmapped_vars = Set{Int64}(var_domain)
+
+
+    # println(flowmaps)
+
+    for (srcflow, tgtflow) in enumerate(flowmaps)
+        srcflow_var = flowvar_domain[srcflow]
+        tgtflow_var = flowvar_codomain[tgtflow]
+
+        flowvar_maps[srcflow_var] = tgtflow_var
+
+        push!(flowvar_reverse_maps[tgtflow_var], srcflow_var)
+
+        # push!(flowvar_maps, (srcflow_var, tgtflow_var))
+        delete!(unmapped_vars, srcflow_var)
+    end # ok now we actually have the maps flowvar -> flowvar
+
+
+
+
+
+    # var_mappings = zeros(Int64, length(var_domain)) # initialize array for var mappings.
+    # var_mappings_successful_set = Set(var_domain)
+    # # Working off the assumption that the flowvar won't change when mapping.  
+    # println(flowvar_domain, var_mappings, var_codomain, flowvar_codomain)
+
+    # for (i, x) in enumerate(flowvar_domain) # i is index in domain fv, x is actual entry.  x points to a variable index in domain.
+    #     var_mappings[x] = var_codomain[flowvar_codomain[i]]
+    #     pop!(var_mappings_successful_set, x)
+    #     # (fv -> v) = (corresponding fv -> v)
+    # end
+
+    # So by this point we should have all the flow variables correctly mapped.  We now need to look at non-flow variables.
+    # We can check if there exist unique variable/stock or 
+
+    lv_domain = extract_subpart_ordered_tuple(sfsrc, :lvs, :lvv)
+    lv_codomain = extract_subpart_ordered_tuple(sftgt, :lvs, :lvv)
+
+    lsv_domain = extract_subpart_ordered_tuple(sfsrc, :lsvsv, :lsvv)
+    lsv_codomain = extract_subpart_ordered_tuple(sftgt, :lsvsv, :lsvv)
+
+    lvv_domain = extract_subpart_ordered_tuple(sfsrc, :lvsrc, :lvtgt)
+    lvv_codomain = extract_subpart_ordered_tuple(sftgt, :lvsrc, :lvtgt)
+
+    lpv_domain = extract_subpart_ordered_tuple(sfsrc, :lpvp, :lpvv)
+    lpv_codomain = extract_subpart_ordered_tuple(sftgt, :lpvp, :lpvv)
+
+
+    var_maps = copy(flowvar_maps)::Vector{Int64} # TODO: make this a nonsucky data structure.  Vector{Int64} initialized with 0 is probably fine.
+    # k fixed should be ok now just
+    reverse_maps = copy(flowvar_reverse_maps)
+
+    while !(isempty(unmapped_vars)) # if there exist variables which aren't just flow variables
+        # things get weird here.  Now, we're going to check for variable links with known variables and see if they're unique.
+        # possibly requires recursion, eg if v_x = v_a + v_b, v_x′ = v_a + v_c
+        # We will also potentially need to check for stock or sum variable links
+
+        println("UNMAPPED: $(unmapped_vars)")
+
+
+        vars_to_check_vector = collect(unmapped_vars)
+
+
+        # for vars, src is on right side, tgt is on left.  So, we're looking for src; we want to go backwards, trying to find flowvars made of unknown vars.
+        # Unless we have a weird case where a variable has no relation to a flow, we should find all of them
+
+        # known: lvtgt
+        # unknown: lvsrc
+
+        for var::Int64 in vars_to_check_vector
+            varlinks = filter((((lvsrc, lvtgt),) -> lvsrc == var), lvv_domain) # all variable -> variable links with var
+
+            println("varlinks:$varlinks")
+
+            known_varlinks = filter(((lvsrc, lvtgt),) -> !(lvtgt in unmapped_vars), varlinks) # all variable links such that we know what tgt maps to
+            # specifically, all links which contain var, and some other variable
+
+
+            println("known_variables:$known_varlinks")
+            # If our known variable links to multiple unknown, then we're screwed; can't figure out which link this one should go with.  So, need to filter those out.
+            # This will only occur in cases where a variable is result of two other variables.  Should be able to fix this by refactoring.
+            # So there are some cases where this just won't work at all.
+            known_counter = DefaultDict{Int64,Int64}(0)
+
+            # known_varlinkset = Set{Int64}([k[2] for k in known_varlinks])
+
+            # for (lvsrc, lvtgt) in lvv_codomain # uh I think this can be done outside the loop?  
+            #     # TODO: figure out if I can move it without any trouble
+            #     if length(flowvar_reverse_maps[lvtgt]) 
+            #     known_counter[lvtgt] += 1
+            # end
+            println("known_counter: $known_counter")
+            println("reverse_maps: $reverse_maps")
+
+            known_varlinks_with_unique_known = filter(((lvsrc, lvtgt),) -> length(filter(x -> !(x in unmapped_vars), 
+            reverse_maps[lvsrc])) < 2, known_varlinks)
+                
+
+            println("known_varlinks_with_unique_known: $known_varlinks_with_unique_known")
+            
+            println("YEYEY")
+            if length(known_varlinks_with_unique_known) == 1 # Hooray!  Unique link! 
+                # that is, at this point, we have a dynamic variable which we know what it maps to, and we know it has one variable link
+                # so, what we can do is find that variable link in the codomain and use that to figure out what this variable should map to
+                known_varlink = known_varlinks_with_unique_known[1]
+                known_varlink_tgt = known_varlink[2]
+                println(known_varlink_tgt)
+                println(var_maps)
+
+                known_var_image = var_maps[known_varlink_tgt]
+
+                # known_var_image = var_maps[src]
+
+                # known_var_image = filter(((src, tgt),) -> src == known_varlink_tgt, var_maps)[1][2] # if there are more than one of these something has gone horribly wrong.
+                # TODO: Change datatype of flowvar_maps/var_maps.  Probably just make it a straight Vector{Int64} of length var_domain and default vals 0.  Standard index -> value.
+                println("known_var_image: $known_var_image")
+                println("lvv_codomain: $lvv_codomain")
+
+                known_var_image_varlink = filter(((lvsrc, lvtgt),) -> lvtgt == known_var_image && lvsrc in unmapped_vars, lvv_codomain) # once again, if there are more than one, something has gone horribly wrong
+                # known_varlinks_with_unique_known should be forcing this to be length 1
+                if !(length(known_var_image_varlink) == 1)
+                    println("didn't get one varlink!  $(known_var_image_varlink), continuing!")
+                    continue
+                end
+                # @assert length(known_var_image_varlink) == 1 "didn't get one varlink!  $(known_var_image_varlink)"
+
+                known_var_image_varlink_src = known_var_image_varlink[1][1]
+
+                var_maps[var] = known_var_image_varlink_src
+
+
+                push!(reverse_maps[known_var_image_varlink_src], var)
+                # push!(var_maps, (var, known_var_image_varlink_src))
+                delete!(unmapped_vars, var)
+                println("unmapped_vars: $unmapped_vars")
+                println("DSAD")
+            end
+
+
+            # println(varlinks)
+        end
+
+        if length(unmapped_vars) == length(vars_to_check_vector) # that is, we iterated over all the elements in the set and discovered no new links.
+            # if this happens, we do not have enough information to determine the remaining dynamic_variable links from flowlinks alone.
+            # TODO: Add checks with stocks and sum variables.
+            println("ah crap")
+            println("Set contains: $(unmapped_vars)")
+            @assert false
+
+        end
+
+
+    println("var_maps: $var_maps")
+    println("Unmapped: $unmapped_vars")
+
+
+
+    end
+
+end
+
+
+    # I suppose we can start with looking at flow variables?
+
+
+
+
 
 
 end
