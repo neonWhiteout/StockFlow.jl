@@ -467,6 +467,96 @@ end
 
 
 
+function infer_dyvars_from_flows(sfsrc::AbstractStockAndFlowStructure, sftgt::AbstractStockAndFlowStructure, maps_flows::Vector{Int64})
+    sfsrc_flow_count = nf(sfsrc)
+    sftgt_flow_count = nf(sftgt)
+    
+    @assert length(maps_flows) == sfsrc_flow_count "Number of flows provided does not equal number of flows in source!"
+    @assert 0 < min(maps_flows) && max(maps_flows) < sftgt_flow_count "Flow from source maps to a flow which doesn't exist in target!"
+
+    sfsrc_dyvar_count = nvb(sfsrc)
+    sftgt_dyvar_count = nvb(sftgt)
+
+    sfsrc_flowdyvar_ordered = extract_subpart_ordered(sfsrc, :fv)
+    sftgt_flowdyvar_ordered = extract_subpart_ordered(sftgt, :fv)
+
+    maps_dyvar_discovered = zeros(Int64, sfsrc_dyvar_count) # initialize srcdyvar -> tgtdyvar map as a vector of length 
+    invmaps_dyvar_discovered = [Set{Int64}() for _ in var_codomain] # this is a bit terrible.
+    # It's an inverse mapping which lets me keep track if that particular dyvar is injective.
+    # Could instead use a dictionary with a disjoint union to specify maps/invmaps?  It'd be Dict{Tuple{Int64,Int64}, Union{Vector{Int64}, Int64}}, or just Dict{Tuple{Int64,Int64}, Vector{Int64}}
+
+    unmapped_dyvars = Set{Int64}(1:sfsrc_flow_count)
+
+
+    # Operating under the assumption that if flow f(v) maps to f′(v′), then v maps to v′
+    # If this is false, this function will not act correctly.
+    for (srcflow, tgtflow) in enumerate(maps_flows)
+        srcflowdyvar = sfsrc_flowdyvar_ordered[srcflow]
+        tgtflowdyvar = sftgt_flowdyvar_ordered[tgtflow]
+
+        maps_dyvar_discovered[srcflowdyvar] = tgtflowdyvar
+        push!(invmaps_dyvar_discovered[tgtflowdyvar], srcflowdyvar)
+
+        delete!(unmapped_dyvars, srcflowdyvar) # alternatively, make maps_flowdyvar_discovered a Dict?
+    end 
+    # We now have all the flowdyvars
+
+
+    # We need to look at lvtgt and lvsrc, but because we're using src and tgt for the sf,
+    # and lvtgt and lvsrc are within the categories, maintaing that notation will be confusing
+    # they take the form lvtgt = op(lvsrc, x)
+    # as such, I will refer to lvsrc as lvarg and lvtgt as lvres (for argument and result respectively)
+    # We figure out what variables make up lvres and use that to determine their mapping, if a unique one exists.
+
+
+    lvv_src = extract_subpart_ordered_tuple(sfsrc, :lvsrc, :lvtgt)
+    lvv_tgt = extract_subpart_ordered_tuple(sftgt, :lvsrc, :lvtgt)
+    # less_than_two_unknown_target_dyvar = filter(tgtdyvar_reverse_mapping -> length(
+        # filter(srcdyvar -> !(srcdyvar in unmapped_dyvars), tgtdyvar_reverse_mapping)
+    # ) < 2, invmaps_dyvar_discovered)
+
+    while !(isempty(unmapped_dyvars)) # if there exist variables which aren't just flow variables
+        # things get weird here.  Now, we're going to check for variable links with known variables and see if they're unique.
+        # if there is no way to distinguish them - eg, the only flow that exists is f(v), and v = v₁ + v₂
+        # is the only dyvar definition with dyvar arguments - then this will fail.  A bit more on this below.
+        # It may also fail in circular cases, need further testing
+
+        current_unmapped_dyvar_vector = collect(unmapped_dyvars)
+
+        for current_dyvar::Int64 in current_unmapped_dyvar_vector
+            current_dyvar_links = filter(((lvarg, lvres),) -> lvarg == current_dyvar, lvv_src) # All variable links containing current_dyvar in sfsrc
+            known_current_dyvar_links = filter(((lvarg, lvres),) -> !(lvres in unmapped_dyvars), current_dyvar_links) # all variable links such that we know what res (tgt) maps to
+            # initially, this will only be the flow dyvars, but repeated loops will add to it
+            # TODO: Determine if using sum links or parameter links would also be useful?  Currently, I only look at flow dyvars and dyvar to dyvar links
+
+            # we now filter for links such that lvarg (src) only has one unknown dyvar arg (tgt)
+            # in cases like v = w + x where w and x are both unknown, there's nothing distinguishing F(w) and F(v)
+            # Where w is known, however, we know that F(w) is known, so we know F(v) is the remaining unknown
+
+            # current_dyvar_tgt_reverse_mapping = filter(((lvarg, lvres),) -> filter((lvarg_rev, lvres_rev),) -> [maps_dyvar_discovered[lvres]], known_current_dyvar_links)
+            for (_, lvres) in known_current_dyvar_links
+
+            
+
+            end
+        end
+    end
+end
+
+
+
+
+
+
+# end
+
+
+
+
+
+
+
+
 
 
 end
