@@ -103,12 +103,12 @@ end
 ```
 """
 module Syntax
-export @stock_and_flow
+export @stock_and_flow, add_suffix!, add_prefix!, @foot
 
 
 using StockFlow
 using MLStyle
-import Base.*
+
 
 
 
@@ -145,11 +145,6 @@ Compiles stock and flow syntax of the line-based block form
 into a StockAndFlowF data type for use with the StockFlow.jl modelling system.
 """
 macro stock_and_flow(block)
-   stock_and_flow_function(block)
-end
-
-
-function stock_and_flow_function(block)
     Base.remove_linenums!(block)
     syntax_lines = parse_stock_and_flow_syntax(block.args)
     saff_args = stock_and_flow_syntax_to_arguments(syntax_lines)
@@ -163,24 +158,67 @@ function stock_and_flow_function(block)
 end
 
 
-"""
-Concatenate Symbol and (Symbol or String) and return a Symbol.
-"""
-*(a::Symbol,b::Union{Symbol, String}) = Symbol(string(a, b))
-
 
 """
-Same as single argument stock_and_flow macro, but first argument acts as a suffix for names.
+S => N
+S => CLOUD
+CLOUD => N
+CLOUD => CLOUD
 """
-macro stock_and_flow(suffix, block)
-    sf = stock_and_flow_function(block)
-    set_snames!(sf, snames(sf) .* suffix)
-    set_fnames!(sf, fnames(sf) .* suffix)
-    set_svnames!(sf, svnames(sf) .* suffix)
-    set_vnames!(sf, vnames(sf) .* suffix)
-    set_pnames!(sf, pnames(sf) .* suffix)
+
+macro foot(block)
+    Base.remove_linenums!(block)
+    f, v1, v2 = block.args
+    if f != :(=>) || !(v1 isa Symbol) || !(v2 isa Symbol)
+        println("Unknown syntax block for foot.")
+        return
+    end
+    
+    @match (v1, v2) begin
+        (:CLOUD, :CLOUD) => return StockAndFlowF()
+        (v1, :CLOUD) => return StockAndFlowF([v1 => ([],[],[])], [],[],[],[])
+        (:CLOUD, v2) => return StockAndFlowF([],[],[],[],[v2])
+        (v1, v2) => return StockAndFlowF([v1 => ([],[],[v2])], [],[], [], (v1, v2))
+    end
+end
+
+"""
+Concatenate Symbols.
+"""
+++(a::Symbol,b::Symbol) = Symbol(string(a, b))
+
+function add_suffix!(sf, suffix)
+    suffix = Symbol(suffix)
+    set_snames!(sf, snames(sf) .++ suffix)
+    set_fnames!(sf, fnames(sf) .++ suffix)
+    set_svnames!(sf, svnames(sf) .++ suffix)
+    set_vnames!(sf, vnames(sf) .++ suffix)
+    set_pnames!(sf, pnames(sf) .++ suffix)
     return sf
 end
+
+function add_prefix!(sf, prefix)
+    prefix = Symbol(prefix)
+    set_snames!(sf, prefix .++ snames(sf))
+    set_fnames!(sf, prefix .++ fnames(sf))
+    set_svnames!(sf, prefix .++ svnames(sf))
+    set_vnames!(sf, prefix .++ vnames(sf))
+    set_pnames!(sf, prefix .++ pnames(sf))
+    return sf
+end
+
+# """
+# Same as single argument stock_and_flow macro, but first argument acts as a suffix for names.
+# """
+# macro stock_and_flow(suffix, block)
+#     sf = stock_and_flow_function(block)
+#     set_snames!(sf, snames(sf) .* suffix)
+#     set_fnames!(sf, fnames(sf) .* suffix)
+#     set_svnames!(sf, svnames(sf) .* suffix)
+#     set_vnames!(sf, vnames(sf) .* suffix)
+#     set_pnames!(sf, pnames(sf) .* suffix)
+#     return sf
+# end
 
 
 """
@@ -359,7 +397,7 @@ Check that the dyvar_name is not used somewhere in the dyvar_def
 
 ### Input
 - `dyvar_name` -- A dyvar name as a Julia Symbol
-- `dyvar_expr` -- A Julia expression
+- `dyvar_expr` -- A Julia expression 
 
 ### Output
 True if the dyvar name is used in the expression; false elsewise.
