@@ -103,7 +103,7 @@ end
 ```
 """
 module Syntax
-export @stock_and_flow, add_suffix!, add_prefix!, @foot
+export @stock_and_flow, add_suffix!, add_prefix!, @foot, @feet 
 
 
 using StockFlow
@@ -165,9 +165,13 @@ S => CLOUD
 CLOUD => N
 CLOUD => CLOUD
 """
-
 macro foot(block)
     Base.remove_linenums!(block)
+    return create_foot(block)
+end
+
+
+function create_foot(block)
     f, v1, v2 = block.args
     if f != :(=>) || !(v1 isa Symbol) || !(v2 isa Symbol)
         println("Unknown syntax block for foot.")
@@ -175,11 +179,31 @@ macro foot(block)
     end
     
     @match (v1, v2) begin
-        (:CLOUD, :CLOUD) => return StockAndFlowF()
-        (v1, :CLOUD) => return StockAndFlowF([v1 => ([],[],[])], [],[],[],[])
-        (:CLOUD, v2) => return StockAndFlowF([],[],[],[],[v2])
-        (v1, v2) => return StockAndFlowF([v1 => ([],[],[v2])], [],[], [], (v1, v2))
+        (:CLOUD, :CLOUD) => return foot((),(),())
+        (v1, :CLOUD) => return foot(v1,(),())
+        (:CLOUD, v2) => return foot((),v2,())
+        (v1, v2) => return foot(v1,v2, v1 => v2)
     end
+end
+
+"""
+Create Vector of feet using same notation for foot macro
+    Separated by newlines.
+
+@foot = begin
+    A => B
+    CLOUD => N
+    C => CLOUD
+    D => E
+end
+"""
+macro feet(block)
+    feetvector = Vector{StockAndFlow0}()
+    Base.remove_linenums!(block)
+    for line in block.args
+        push!(feetvector, create_foot(line))
+    end
+    return feetvector
 end
 
 """
@@ -187,7 +211,10 @@ Concatenate Symbols.
 """
 ++(a::Symbol,b::Symbol) = Symbol(string(a, b))
 
-function add_suffix!(sf, suffix)
+"""
+Modify a AbstractStockAndFlowStructureF so named elements end with suffix.
+"""
+function add_suffix!(sf::AbstractStockAndFlowStructureF, suffix)
     suffix = Symbol(suffix)
     set_snames!(sf, snames(sf) .++ suffix)
     set_fnames!(sf, fnames(sf) .++ suffix)
@@ -197,7 +224,32 @@ function add_suffix!(sf, suffix)
     return sf
 end
 
-function add_prefix!(sf, prefix)
+
+"""
+Modify a AbstractStockAndFlow0 so named elements end with suffix.
+For feet.
+"""
+function add_suffix!(sf::AbstractStockAndFlow0, suffix)
+    suffix = Symbol(suffix)
+    set_snames!(sf, snames(sf) .++ suffix)
+    set_svnames!(sf, svnames(sf) .++ suffix)
+    return sf
+end
+
+
+"""
+Modify a StructuredCospan so named elements end with suffix.
+This should work with Open.  Type is more broad than needs to be.
+"""
+function add_suffix!(sf::StructuredCospan, suffix)
+    add_suffix!(getfield(sf, :cospan), suffix)
+    foreach(foot -> add_suffix!(foot, suffix), getfield(sf, :feet))
+return sf
+
+"""
+Modify a AbstractStockAndFlowStructureF so named elements begin with prefix
+"""
+function add_prefix!(sf::AbstractStockAndFlowStructureF, prefix)
     prefix = Symbol(prefix)
     set_snames!(sf, prefix .++ snames(sf))
     set_fnames!(sf, prefix .++ fnames(sf))
@@ -206,6 +258,28 @@ function add_prefix!(sf, prefix)
     set_pnames!(sf, prefix .++ pnames(sf))
     return sf
 end
+
+"""
+Modify a AbstractStockAndFlow0 so named elements begin with prefix.
+For feet.
+"""
+function add_prefix!(sf::AbstractStockAndFlow0, suffix)
+    prefix = Symbol(prefix)
+    set_snames!(sf, prefix .++ snames(sf))
+    set_svnames!(sf, prefix .++ svnames(sf))
+    return sf
+end
+
+"""
+Modify a StructuredCospan so named elements begin with prefix.
+This should work with Open.  Type is more broad than needs to be.
+"""
+function add_prefix!(sf::StructuredCospan, prefix)
+    add_prefix!(getfield(sf, :cospan), prefix)
+    foreach(foot -> add_prefix!(foot, prefix), getfield(sf, :feet))
+return sf
+
+
 
 # """
 # Same as single argument stock_and_flow macro, but first argument acts as a suffix for names.
