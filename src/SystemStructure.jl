@@ -258,6 +258,91 @@ end
 
 
 
+"""
+Concatenate Symbols.
+
+```julia
+:A ++ :B
+++(:A, :B)
+```
+"""
+++(a::Symbol,b::Symbol) = Symbol(string(a, b))
+
+"""
+Modify a AbstractStockAndFlowStructureF so named elements end with suffix.
+"""
+function add_suffix!(sf::AbstractStockAndFlowStructureF, suffix)
+    suffix = Symbol(suffix)
+    set_snames!(sf, snames(sf) .++ suffix)
+    set_fnames!(sf, fnames(sf) .++ suffix)
+    set_svnames!(sf, svnames(sf) .++ suffix)
+    set_vnames!(sf, vnames(sf) .++ suffix)
+    set_pnames!(sf, pnames(sf) .++ suffix)
+    return sf
+end
+
+
+"""
+Modify a AbstractStockAndFlow0 so named elements end with suffix.
+For feet.
+"""
+function add_suffix!(sf::AbstractStockAndFlow0, suffix)
+    suffix = Symbol(suffix)
+    set_snames!(sf, snames(sf) .++ suffix)
+    set_svnames!(sf, svnames(sf) .++ suffix)
+    return sf
+end
+
+
+"""
+Modify a StructuredCospan so named elements end with suffix.
+This should work with Open.  Type is more broad than needs to be.
+"""
+function add_suffix!(sf::StructuredCospan, suffix)
+    add_suffix!(getfield(sf, :cospan), suffix)
+    foreach(foot -> add_suffix!(foot, suffix), getfield(sf, :feet))
+return sf
+
+"""
+Modify a AbstractStockAndFlowStructureF so named elements begin with prefix
+"""
+function add_prefix!(sf::AbstractStockAndFlowStructureF, prefix)
+    prefix = Symbol(prefix)
+    set_snames!(sf, prefix .++ snames(sf))
+    set_fnames!(sf, prefix .++ fnames(sf))
+    set_svnames!(sf, prefix .++ svnames(sf))
+    set_vnames!(sf, prefix .++ vnames(sf))
+    set_pnames!(sf, prefix .++ pnames(sf))
+    return sf
+end
+
+"""
+Modify a AbstractStockAndFlow0 so named elements begin with prefix.
+For feet.
+"""
+function add_prefix!(sf::AbstractStockAndFlow0, suffix)
+    prefix = Symbol(prefix)
+    set_snames!(sf, prefix .++ snames(sf))
+    set_svnames!(sf, prefix .++ svnames(sf))
+    return sf
+end
+
+"""
+Modify a StructuredCospan so named elements begin with prefix.
+This should work with Open.  Type is more broad than needs to be.
+"""
+function add_prefix!(sf::StructuredCospan, prefix)
+    add_prefix!(getfield(sf, :cospan), prefix)
+    foreach(foot -> add_prefix!(foot, prefix), getfield(sf, :feet))
+return sf
+
+
+end
+
+
+end
+
+
 
 
 
