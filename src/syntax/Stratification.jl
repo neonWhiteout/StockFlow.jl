@@ -32,11 +32,10 @@ struct SFNames
     mvf::Vector{Int}
     mvp::Vector{Int}
 
+
     SFNames(sfarg::AbstractStockAndFlowF) = (new(sfarg, invert_vector(snames(sfarg)), invert_vector(svnames(sfarg)), invert_vector(vnames(sfarg)), invert_vector(fnames(sfarg)), invert_vector(pnames(sfarg)),
      Dict{Int, Int}(), Dict{Int, Int}(), Dict{Int, Int}(), Dict{Int, Int}(), Dict{Int, Int}(),
      Vector{Int}(),Vector{Int}(), Vector{Int}(), Vector{Int}(), Vector{Int}()))
-
-
 end
 
 function get_mappings(sfn::SFNames)
@@ -55,53 +54,16 @@ function interpret_stratification_notation(mapping_pair::Expr)::Vector{Vector{DS
     # TODO: add a crap ton of assert statements.
     # We're assuming it's gonna take the form [(a1, ..., an), ..., (k1, ..., km)] => t1
 
-    # println(mapping_pair)
-    # println(mapping_pair.args[2])
-    # println(mapping_pair.args[2].args[1])
+    @assert length(mapping_pair) == 3 && typeof(mapping_pair.args[3]) == Symbol && length(mapping_pair.args[2]) && typeof(mapping_pair.args[2].args) == Vector
+
+    # TODO: Include assert that length(mapping_pair.args[2].args) is the same as the number of stockflows
+    # Maybe include an assert that each element of the vector contains only symbols
+
     other = mapping_pair.args[2].args # needs to be a vector of tuples of symbols
     type = mapping_pair.args[3] # needs to be a symbol
-
-    # println(other)
-    # println(typeof(other))
-    # println(typeof(other[1]))
-
-    # return_vector = Vector{Vector{DSLArgument}}()
-
-    # for tup ∈ other.args[1].args
-    #     println(tup)
-    #     push!(return_vector, [DSLArgument(sym, type) for sym ∈ tup.args])
-    # end
-    # return return_vector
-
-    # println(other[1].args)
-
-
     return [[DSLArgument(sym, type) for sym ∈ tup.args] for tup ∈ other]
 end
-#     @match mapping_pair begin
 
-
-#         :($s => $t <= $a) => return ([DSLArgument(s,t)], [DSLArgument(a,t)])
-#         :($s => $t <= $a, $(atail...)) => ([DSLArgument(s,t)], [DSLArgument(a,t) ; [DSLArgument(as,t) for as in atail] ])#return (Dict(unwrap_key_expression(s, t)), push!(Dict(unwrap_key_expression(as, t) for as in atail), unwrap_key_expression(a, t)))
-#         :($(shead...), $s => $t <= $a) => ([[DSLArgument(ss, t) for ss in shead] ; DSLArgument(s, t)], [DSLArgument(a, t)])#return (push!(Dict(unwrap_key_expression(ss, t) for ss in shead), unwrap_key_expression(s, t)), Dict(unwrap_key_expression(a, t)))
-
-#         if mapping_pair.head == :tuple end => begin
-#             middle_index = findfirst(x -> typeof(x) == Expr && length(x.args) == 3, mapping_pair.args) # still isn't specific enough
-#             if isnothing(middle_index)
-#                 error("Malformed line $mapping_pair, could not find center.")
-#             end
-#             @match mapping_pair.args[middle_index] begin
-#                 :($stail => $t <= $ahead) => begin
-#                 sdict = [[DSLArgument(ss, t) for ss in mapping_pair.args[1:middle_index-1]] ; DSLArgument(stail, t)]
-#                 adict = [DSLArgument(ahead, t) ; [DSLArgument(as, t) for as in mapping_pair.args[middle_index+1:end]]]
-#                     return (sdict, adict)
-#                 end
-#                 _ => "Unknown format found for match; middle three values formatted incorrectly."
-#             end
-#         end
-#         _ => error("Unknown line format found in stratification notation.") 
-#     end
-# end
 
 
 
@@ -113,7 +75,7 @@ function read_stratification_line_and_update_dictionaries!(line::Expr, other_nam
 
     current_mapping_dict::Vector{Dict{Int, Int}} = ((x, y) -> substitute_symbols(x,type_names, y; use_flags=use_flags)).(other_names, current_symbol_dict)
 
-    ((cumulative_dict, new_dict) -> mergewith!((cv, nv) -> cv, cumulative_dict, new_dict)).(other_mappings, current_mapping_dict) #TODO: FIX!
+    ((cumulative_dict, new_dict) -> mergewith!((cv, nv) -> cv, cumulative_dict, new_dict)).(other_mappings, current_mapping_dict)
 
 end
 
