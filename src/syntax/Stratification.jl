@@ -54,7 +54,7 @@ function interpret_stratification_notation(mapping_pair::Expr)::Vector{Vector{DS
     # TODO: add a crap ton of assert statements.
     # We're assuming it's gonna take the form [(a1, ..., an), ..., (k1, ..., km)] => t1
 
-    @assert length(mapping_pair) == 3 && typeof(mapping_pair.args[3]) == Symbol && length(mapping_pair.args[2]) && typeof(mapping_pair.args[2].args) == Vector
+    @assert length(mapping_pair.args) == 3 && typeof(mapping_pair.args[3]) == Symbol && length(mapping_pair.args[2]) && typeof(mapping_pair.args[2].args) == Vector
 
     # TODO: Include assert that length(mapping_pair.args[2].args) is the same as the number of stockflows
     # Maybe include an assert that each element of the vector contains only symbols
