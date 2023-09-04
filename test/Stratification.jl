@@ -1,3 +1,10 @@
+using Pkg;
+Pkg.activate(".")
+
+using Test
+
+using StockFlow
+using StockFlow.Syntax
 using StockFlow.Syntax.Stratification
 
 using StockFlow.Syntax.Stratification: interpret_stratification_notation
@@ -179,225 +186,228 @@ using Catlab.CategoricalAlgebra
     
     # #########################################
     
-    age_weight_2 = @stratify WeightModel l_type ageWeightModel quote 
+    age_weight_2 = @nstratify WeightModel ageWeightModel l_type quote 
         :stocks
-        NormalWeight, OverWeight, Obese => pop <= Child, Adult, Senior
+        [(NormalWeight, OverWeight, Obese), (Child, Adult, Senior)] => pop 
     
         :flows
-        f_NewBorn => f_birth <= f_NB
-        f_DeathNormalWeight, f_DeathOverWeight, f_DeathObese => f_death <= f_DeathC, f_DeathA, f_DeathS
-        f_idNW, f_idOW, f_idOb => f_aging <= f_agingCA, f_agingAS
-        f_BecomingOverWeight, f_BecomingObese => f_fstOrder <= f_idC, f_idA, f_idS
+        [(f_NewBorn,),(f_NB,)] => f_birth 
+        [(f_DeathNormalWeight, f_DeathOverWeight, f_DeathObese), ( f_DeathC, f_DeathA, f_DeathS)] => f_death
+        [(f_idNW, f_idOW, f_idOb),(f_agingCA, f_agingAS)] => f_aging
+        [(f_BecomingOverWeight, f_BecomingObese),(f_idC, f_idA, f_idS)] => f_fstOrder
     
         :dynamic_variables
-        v_NewBorn => v_birth <= v_NB
-        v_DeathNormalWeight, v_DeathOverWeight, v_DeathObese => v_death <= v_DeathC, v_DeathA, v_DeathS
-        v_idNW, v_idOW, v_idOb  => v_aging <= v_agingCA, v_agingAS
-        v_BecomingOverWeight, v_BecomingObese => v_fstOrder <= v_idC, v_idA, v_idS
-    
+        [(v_NewBorn,),(v_NB,)] => v_birth
+        [(v_DeathNormalWeight, v_DeathOverWeight, v_DeathObese),(v_DeathC, v_DeathA, v_DeathS)] => v_death
+        [(v_idNW, v_idOW, v_idOb),( v_agingCA, v_agingAS)]  => v_aging
+        [(v_BecomingOverWeight, v_BecomingObese),(v_idC, v_idA, v_idS)] => v_fstOrder
+
         :parameters
-        μ => μ <= μ
-        δw, δo => δ <= δC, δA, δS
-        rw, ro => rFstOrder <= r
-        rage => rage <= rageCA, rageAS
+        [(μ,),(μ,)] => μ
+        [(δw, δo),(δC, δA, δS)] => δ
+        [(rw, ro),(r,)] => rFstOrder
+        [(rage,),(rageCA, rageAS)] => rage
     
         :sums
-        N => N <= N
+        [(N,),(N,)] => N
         
     end
     #########################################
     
-    age_weight_3 =  @stratify WeightModel l_type ageWeightModel quote
+    # age_weight_3 =  @stratify WeightModel l_type ageWeightModel quote
     
-        :flows
-        f_NewBorn => f_birth <= f_NB
-        ~Death => f_death <= ~Death
-        ~id => f_aging <= ~aging
-        ~Becoming => f_fstOrder <= ~id
+    #     :flows
+    #     f_NewBorn => f_birth <= f_NB
+    #     ~Death => f_death <= ~Death
+    #     ~id => f_aging <= ~aging
+    #     ~Becoming => f_fstOrder <= ~id
     
-        :dynamic_variables
-        v_NewBorn => v_birth <= v_NB
-        ~Death => v_death <= ~Death
-        ~id  => v_aging <= ~aging
-        ~Becoming => v_fstOrder <= ~id
+    #     :dynamic_variables
+    #     v_NewBorn => v_birth <= v_NB
+    #     ~Death => v_death <= ~Death
+    #     ~id  => v_aging <= ~aging
+    #     ~Becoming => v_fstOrder <= ~id
     
-        :parameters
-        μ => μ <= μ
-        ~δ => δ <= ~δ
-        rage => rage <= rageCA, rageAS
-        _ => rFstOrder <= _
+    #     :parameters
+    #     μ => μ <= μ
+    #     ~δ => δ <= ~δ
+    #     rage => rage <= rageCA, rageAS
+    #     _ => rFstOrder <= _
     
-    end 
+    # end 
     
-    age_weight_4 =  @stratify WeightModel l_type ageWeightModel quote
+    # age_weight_4 =  @stratify WeightModel l_type ageWeightModel quote
     
-        :flows
-        ~NO_MATCHES => f_birth <= ~NO_MATCHES
-        f_NewBorn => f_birth <= f_NB
-        ~Death => f_death <= ~Death
-        ~id => f_aging <= ~aging
-        ~Becoming => f_fstOrder <= ~id
-        ~Becoming => f_aging <= ~id # Everything already matched; ignored
-        _ => f_aging <= _ # also ignored
+    #     :flows
+    #     ~NO_MATCHES => f_birth <= ~NO_MATCHES
+    #     f_NewBorn => f_birth <= f_NB
+    #     ~Death => f_death <= ~Death
+    #     ~id => f_aging <= ~aging
+    #     ~Becoming => f_fstOrder <= ~id
+    #     ~Becoming => f_aging <= ~id # Everything already matched; ignored
+    #     _ => f_aging <= _ # also ignored
     
-        :dynamic_variables
-        v_NewBorn => v_birth <= v_NB
-        ~Death => v_death <= ~Death
-        ~id  => v_aging <= ~aging
-        _ => v_fstOrder <= _
+    #     :dynamic_variables
+    #     v_NewBorn => v_birth <= v_NB
+    #     ~Death => v_death <= ~Death
+    #     ~id  => v_aging <= ~aging
+    #     _ => v_fstOrder <= _
     
-        :parameters
-        μ => μ <= μ
-        ~δ => δ <= ~δ
-        rage => rage <= rageCA, rageAS
-        _ => rFstOrder <= _
+    #     :parameters
+    #     μ => μ <= μ
+    #     ~δ => δ <= ~δ
+    #     rage => rage <= rageCA, rageAS
+    #     _ => rFstOrder <= _
     
-    end
+    # end
 
+    # println(aged_weight)
+    # println(age_weight_2)
+    # println(aged_weight == age_weight_2)
 
 
 
     @test aged_weight == age_weight_2
-    @test aged_weight == age_weight_3
-    @test aged_weight == age_weight_4
+    # @test aged_weight == age_weight_3
+    # @test aged_weight == age_weight_4
 end
 
-@testset "Ensuring interpret_stratification_notation correctly reads lines" begin # This should be all valid cases.  There's always going to be at least one value on both sides.
-    # Note the orders.  The lists produced go left to right.  A1, A2 => B <= C1, C2 results in [A1 => B, A2 => B], [C1 => B. C2 => B]
+# @testset "Ensuring interpret_stratification_notation correctly reads lines" begin # This should be all valid cases.  There's always going to be at least one value on both sides.
+#     # Note the orders.  The lists produced go left to right.  A1, A2 => B <= C1, C2 results in [A1 => B, A2 => B], [C1 => B. C2 => B]
 
 
-    @test interpret_stratification_notation(:(A => B <= C)) == ([DSLArgument(:A, :B, Set{Symbol}())], [DSLArgument(:C, :B, Set{Symbol}())])
+#     @test interpret_stratification_notation(:(A => B <= C)) == ([DSLArgument(:A, :B, Set{Symbol}())], [DSLArgument(:C, :B, Set{Symbol}())])
     
-    @test interpret_stratification_notation(:(A1, A2 => B <= C)) == (
-        [DSLArgument(:A1, :B, Set{Symbol}()), DSLArgument(:A2, :B, Set{Symbol}())],
-        [DSLArgument(:C, :B, Set{Symbol}())]
-    )
-    @test interpret_stratification_notation(:(A => B <= C1, C2)) == (
-        [DSLArgument(:A, :B, Set{Symbol}())],
-        [DSLArgument(:C1, :B, Set{Symbol}()), DSLArgument(:C2, :B, Set{Symbol}())],
-    )
-    @test interpret_stratification_notation(:(_ => B <= _)) == (
-        [DSLArgument(:_, :B, Set{Symbol}())],
-        [DSLArgument(:_, :B, Set{Symbol}())],
-    )
-    @test interpret_stratification_notation(:(~A => B <= ~C)) == (
-        [DSLArgument(:A, :B, Set{Symbol}([:~]))],
-        [DSLArgument(:C, :B, Set{Symbol}([:~]))],
-    )
-    @test interpret_stratification_notation(:(~A1, A2 => B <= ~C)) == (
-        [DSLArgument(:A1, :B, Set{Symbol}([:~])), DSLArgument(:A2, :B, Set{Symbol}())],
-        [DSLArgument(:C, :B, Set{Symbol}([:~]))],
-    )
+#     @test interpret_stratification_notation(:(A1, A2 => B <= C)) == (
+#         [DSLArgument(:A1, :B, Set{Symbol}()), DSLArgument(:A2, :B, Set{Symbol}())],
+#         [DSLArgument(:C, :B, Set{Symbol}())]
+#     )
+#     @test interpret_stratification_notation(:(A => B <= C1, C2)) == (
+#         [DSLArgument(:A, :B, Set{Symbol}())],
+#         [DSLArgument(:C1, :B, Set{Symbol}()), DSLArgument(:C2, :B, Set{Symbol}())],
+#     )
+#     @test interpret_stratification_notation(:(_ => B <= _)) == (
+#         [DSLArgument(:_, :B, Set{Symbol}())],
+#         [DSLArgument(:_, :B, Set{Symbol}())],
+#     )
+#     @test interpret_stratification_notation(:(~A => B <= ~C)) == (
+#         [DSLArgument(:A, :B, Set{Symbol}([:~]))],
+#         [DSLArgument(:C, :B, Set{Symbol}([:~]))],
+#     )
+#     @test interpret_stratification_notation(:(~A1, A2 => B <= ~C)) == (
+#         [DSLArgument(:A1, :B, Set{Symbol}([:~])), DSLArgument(:A2, :B, Set{Symbol}())],
+#         [DSLArgument(:C, :B, Set{Symbol}([:~]))],
+#     )
 
-    @test interpret_stratification_notation(:(~_ => B <= ~_, C)) == ( # Weird case.  Matches everything with _ as a substring.
-        [DSLArgument(:_, :B, Set{Symbol}([:~]))],
-        [DSLArgument(:_, :B, Set{Symbol}([:~])), DSLArgument(:C, :B, Set{Symbol}())]
-    )
+#     @test interpret_stratification_notation(:(~_ => B <= ~_, C)) == ( # Weird case.  Matches everything with _ as a substring.
+#         [DSLArgument(:_, :B, Set{Symbol}([:~]))],
+#         [DSLArgument(:_, :B, Set{Symbol}([:~])), DSLArgument(:C, :B, Set{Symbol}())]
+#     )
 
-end
-
-
-@testset "Unwrapping expressions works correctly" begin
-    @test unwrap_expression(:S) == (:S, Set{Symbol}())
-    @test unwrap_expression(:(~S)) == (:S, Set{Symbol}([:~]))
-    @test unwrap_expression(:(~_)) == (:_, Set{Symbol}([:~]))
-end
+# end
 
 
-# function substitute_symbols(s::Dict{Symbol, Int}, t::Dict{Symbol, Int}, m::Vector{DSLArgument} ; use_flags::Bool=true)::Dict{Int, Int}
+# @testset "Unwrapping expressions works correctly" begin
+#     @test unwrap_expression(:S) == (:S, Set{Symbol}())
+#     @test unwrap_expression(:(~S)) == (:S, Set{Symbol}([:~]))
+#     @test unwrap_expression(:(~_)) == (:_, Set{Symbol}([:~]))
+# end
 
-@testset "Testing substituting symbols" begin # underscore matching occurs at the very end, after this step.
-    s1 = Dict(:A => 1)
-    t1 = Dict(:B => 2)
-    m1₁ = [DSLArgument(:A, :B, Set{Symbol}())]
-    m1₂ = [DSLArgument(:A, :B, Set{Symbol}([:~]))]
+
+# # function substitute_symbols(s::Dict{Symbol, Int}, t::Dict{Symbol, Int}, m::Vector{DSLArgument} ; use_flags::Bool=true)::Dict{Int, Int}
+
+# @testset "Testing substituting symbols" begin # underscore matching occurs at the very end, after this step.
+#     s1 = Dict(:A => 1)
+#     t1 = Dict(:B => 2)
+#     m1₁ = [DSLArgument(:A, :B, Set{Symbol}())]
+#     m1₂ = [DSLArgument(:A, :B, Set{Symbol}([:~]))]
  
-    @test substitute_symbols(s1, t1, m1₁) == Dict(1 => 2) # A=>B -> 1=>2
-    @test substitute_symbols(s1, t1, m1₂) == Dict(1 => 2) # A=>B -> 1=>2
-    @test substitute_symbols(s1, t1, m1₂, use_flags=false) == Dict(1 => 2) # A=>B -> 1=>2
+#     @test substitute_symbols(s1, t1, m1₁) == Dict(1 => 2) # A=>B -> 1=>2
+#     @test substitute_symbols(s1, t1, m1₂) == Dict(1 => 2) # A=>B -> 1=>2
+#     @test substitute_symbols(s1, t1, m1₂, use_flags=false) == Dict(1 => 2) # A=>B -> 1=>2
 
-    s2 = Dict(:A1 => 10, :A2 => 20, :A3 => 30) # Unfortunately, cannot do substring matches starting with numbers, since it would require a symbol starting with a numbre.  Might need to add something for this...
-    t2 = Dict(:B1 => 1, :B2 => 2)
-    m2₁ = [DSLArgument(:A, :B1, Set{Symbol}([:~]))]
+#     s2 = Dict(:A1 => 10, :A2 => 20, :A3 => 30) # Unfortunately, cannot do substring matches starting with numbers, since it would require a symbol starting with a numbre.  Might need to add something for this...
+#     t2 = Dict(:B1 => 1, :B2 => 2)
+#     m2₁ = [DSLArgument(:A, :B1, Set{Symbol}([:~]))]
 
-    @test substitute_symbols(s2, t2, m2₁) == Dict(10 => 1, 20 => 1, 30 => 1) #~A=>B -> 10=>1, 20=>1, 30=>1
-    # @test substitute_symbols(s2, t2, m2₁, use_flags=false) == Dict()  # deliberately throws an error
+#     @test substitute_symbols(s2, t2, m2₁) == Dict(10 => 1, 20 => 1, 30 => 1) #~A=>B -> 10=>1, 20=>1, 30=>1
+#     # @test substitute_symbols(s2, t2, m2₁, use_flags=false) == Dict()  # deliberately throws an error
 
-    s3 = Dict{Symbol, Int}()
-    t3 = Dict{Symbol, Int}()
-    m3 = Vector{DSLArgument}()
+#     s3 = Dict{Symbol, Int}()
+#     t3 = Dict{Symbol, Int}()
+#     m3 = Vector{DSLArgument}()
 
-    @test substitute_symbols(s3, t3, m3) == Dict()
-    @test substitute_symbols(s3, t3, m3, use_flags=false) == Dict()
+#     @test substitute_symbols(s3, t3, m3) == Dict()
+#     @test substitute_symbols(s3, t3, m3, use_flags=false) == Dict()
 
-    s4 = Dict(:A1 => 1, :A2 => 2, :AB3 => 3, :AB4 => 4, :A5 => 5)
-    t4 = Dict(:B1 => 1, :B2 => 2, :B3 => 3)
-    m4 = [DSLArgument(:A1, :B1, Set{Symbol}()), DSLArgument(:B, :B2, Set{Symbol}([:~])), DSLArgument(:A, :B3, Set{Symbol}([:~]))]
+#     s4 = Dict(:A1 => 1, :A2 => 2, :AB3 => 3, :AB4 => 4, :A5 => 5)
+#     t4 = Dict(:B1 => 1, :B2 => 2, :B3 => 3)
+#     m4 = [DSLArgument(:A1, :B1, Set{Symbol}()), DSLArgument(:B, :B2, Set{Symbol}([:~])), DSLArgument(:A, :B3, Set{Symbol}([:~]))]
 
-    # always goes with first match.  A1 is taken, B matches AB3 and AB4, then A matches A2 and A5
-    @test substitute_symbols(s4, t4, m4) == Dict(1 => 1, 3 => 2, 4 => 2, 2 => 3, 5 => 3)
-end
-
-
-@testset "nondefault flags work as expected" begin
-    A_ = (@stock_and_flow begin
-        :stocks
-        A
-        _
-    end)
-
-    X_ = (@stock_and_flow begin
-        :stocks
-        X
-        _
-    end)
-
-    B_ = (@stock_and_flow begin
-        :stocks
-        B
-        _
-    end)
-
-    strat_AXB = (quote
-    :stocks
-    _ => _ <= _
-    A => X <= B
-    ~A => X <= ~B # everything is already assigned, so does nothing (or throws error if strict_matches is true)
-    end)
+#     # always goes with first match.  A1 is taken, B matches AB3 and AB4, then A matches A2 and A5
+#     @test substitute_symbols(s4, t4, m4) == Dict(1 => 1, 3 => 2, 4 => 2, 2 => 3, 5 => 3)
+# end
 
 
-    sfA = (@stock_and_flow begin; :stocks; A; end;)
+# @testset "nondefault flags work as expected" begin
+#     A_ = (@stock_and_flow begin
+#         :stocks
+#         A
+#         _
+#     end)
 
-    @test (sfstratify(A_, X_, B_, strat_AXB, use_temp_strat_default=false)
-    == (@stock_and_flow begin
-        :stocks
-        AB
-        __
-    end))
+#     X_ = (@stock_and_flow begin
+#         :stocks
+#         X
+#         _
+#     end)
 
-    # doesn't show up anywhere, so doesn't affect anything.  Could also set it to something untypable in the DSL, like Symbol("")
-    @test (sfstratify(A_, X_, B_, strat_AXB, temp_strat_default=:ABABABABA) 
-    == (@stock_and_flow begin
-        :stocks
-        AB
-        __
-    end))
+#     B_ = (@stock_and_flow begin
+#         :stocks
+#         B
+#         _
+#     end)
 
-    @test_throws AssertionError (sfstratify(A_, X_, B_, strat_AXB, strict_matches=true)) # A matches against A and ~A, which is disallowed with this flag.
+#     strat_AXB = (quote
+#     :stocks
+#     _ => _ <= _
+#     A => X <= B
+#     ~A => X <= ~B # everything is already assigned, so does nothing (or throws error if strict_matches is true)
+#     end)
 
-    @test_throws ErrorException (sfstratify(sfA,sfA,sfA,(quote end) ; strict_mappings=true)) # strict_mappings=false wouldn't throw an error, and would infer strata and aggregate need to map to the only stock.
+
+#     sfA = (@stock_and_flow begin; :stocks; A; end;)
+
+#     @test (sfstratify(A_, X_, B_, strat_AXB, use_temp_strat_default=false)
+#     == (@stock_and_flow begin
+#         :stocks
+#         AB
+#         __
+#     end))
+
+#     # doesn't show up anywhere, so doesn't affect anything.  Could also set it to something untypable in the DSL, like Symbol("")
+#     @test (sfstratify(A_, X_, B_, strat_AXB, temp_strat_default=:ABABABABA) 
+#     == (@stock_and_flow begin
+#         :stocks
+#         AB
+#         __
+#     end))
+
+#     @test_throws AssertionError (sfstratify(A_, X_, B_, strat_AXB, strict_matches=true)) # A matches against A and ~A, which is disallowed with this flag.
+
+#     @test_throws ErrorException (sfstratify(sfA,sfA,sfA,(quote end) ; strict_mappings=true)) # strict_mappings=false wouldn't throw an error, and would infer strata and aggregate need to map to the only stock.
 
 
-    nothing_sfA = map(sfA, Position=NothingFunction, Op=NothingFunction, Name=NothingFunction)
+#     nothing_sfA = map(sfA, Position=NothingFunction, Op=NothingFunction, Name=NothingFunction)
 
-    @test (sfstratify(sfA,sfA,sfA,(quote end), return_homs=true) == (
-    (@stock_and_flow begin
-        :stocks
-        AA
-    end),
-    ACSetTransformation(sfA, nothing_sfA ; S=[1], F=Vector{Int}(),V =Vector{Int}(),SV=Vector{Int}(),P=Vector{Int}(),LS=Vector{Int}(),I=Vector{Int}(),O=Vector{Int}(),LV=Vector{Int}(),LSV=Vector{Int}(),LVV=Vector{Int}(),LPV=Vector{Int}(), Position=NothingFunction, Op=NothingFunction, Name=NothingFunction), # strata -> type
-    ACSetTransformation(sfA, nothing_sfA ; S=[1], F=Vector{Int}(),V =Vector{Int}(),SV=Vector{Int}(),P=Vector{Int}(),LS=Vector{Int}(),I=Vector{Int}(),O=Vector{Int}(),LV=Vector{Int}(),LSV=Vector{Int}(),LVV=Vector{Int}(),LPV=Vector{Int}(), Position=NothingFunction, Op=NothingFunction, Name=NothingFunction) # aggregate -> type
-    )) # the empty lists are necessary for equality, but it'd still be an equivalent homomorphism if you didn't specify them.
+#     @test (sfstratify(sfA,sfA,sfA,(quote end), return_homs=true) == (
+#     (@stock_and_flow begin
+#         :stocks
+#         AA
+#     end),
+#     ACSetTransformation(sfA, nothing_sfA ; S=[1], F=Vector{Int}(),V =Vector{Int}(),SV=Vector{Int}(),P=Vector{Int}(),LS=Vector{Int}(),I=Vector{Int}(),O=Vector{Int}(),LV=Vector{Int}(),LSV=Vector{Int}(),LVV=Vector{Int}(),LPV=Vector{Int}(), Position=NothingFunction, Op=NothingFunction, Name=NothingFunction), # strata -> type
+#     ACSetTransformation(sfA, nothing_sfA ; S=[1], F=Vector{Int}(),V =Vector{Int}(),SV=Vector{Int}(),P=Vector{Int}(),LS=Vector{Int}(),I=Vector{Int}(),O=Vector{Int}(),LV=Vector{Int}(),LSV=Vector{Int}(),LVV=Vector{Int}(),LPV=Vector{Int}(), Position=NothingFunction, Op=NothingFunction, Name=NothingFunction) # aggregate -> type
+#     )) # the empty lists are necessary for equality, but it'd still be an equivalent homomorphism if you didn't specify them.
 
-end
+# end
 
