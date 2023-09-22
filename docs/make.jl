@@ -54,6 +54,6 @@ makedocs(
 @info "Deploying docs"
 deploydocs(
   target = "build",
-  repo   = "github.com/AlgebraicJulia/StockFlow.jl.git",
-  branch = "gh-pages"
+  repo   = "github.com/neonWhiteout/StockFlow.jl.git",
+  branch = "ServeDocs"
 )
