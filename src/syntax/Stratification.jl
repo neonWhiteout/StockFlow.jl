@@ -1,31 +1,104 @@
 module Stratification
-export sfstratify
+export sfstratify, @stratify, @n_stratify
 
 using ...StockFlow
 using ..Syntax
 using MLStyle
 import Base: get
 using Catlab.CategoricalAlgebra
-import ..Syntax: STRICT_MAPPINGS, STRICT_MATCHES, infer_links, substitute_symbols, DSLArgument, NothingFunction, invert_vector
+import ..Syntax: infer_links, substitute_symbols, DSLArgument, NothingFunction, invert_vector
 
-# Possible other settings: USE_FLAGS, USE_TEMP_STRAT_DEFAULT
 
-RETURN_HOMS = false
 
-TEMP_STRAT_DEFAULT = :_
+struct SFNames
+
+    sf::AbstractStockAndFlowF 
+
+    snames::Vector{Symbol} 
+    svnames::Vector{Symbol}
+    vnames::Vector{Symbol}
+    fnames::Vector{Symbol}
+    pnames::Vector{Symbol}
+
+    # name -> index
+    s::Dict{Symbol, Int}
+    sv::Dict{Symbol, Int}
+    v::Dict{Symbol, Int}
+    f::Dict{Symbol, Int}
+    p::Dict{Symbol, Int}
+
+    # index -> new index
+    ms::Dict{Int, Int}
+    msv::Dict{Int, Int}
+    mv::Dict{Int, Int}
+    mf::Dict{Int, Int}
+    mp::Dict{Int, Int}
+
+    # index -> new index, where the first index is the actual index of the vector, the second is the int at that location
+    mvs::Vector{Int}
+    mvsv::Vector{Int}
+    mvv::Vector{Int}
+    mvf::Vector{Int}
+    mvp::Vector{Int}
+
+
+    SFNames(sfarg::AbstractStockAndFlowF) = (new(sfarg,
+     snames(sfarg), svnames(sfarg), vnames(sfarg), fnames(sfarg), pnames(sfarg),
+     invert_vector(snames(sfarg)), invert_vector(svnames(sfarg)), invert_vector(vnames(sfarg)), invert_vector(fnames(sfarg)), invert_vector(pnames(sfarg)),
+     Dict{Int, Int}(), Dict{Int, Int}(), Dict{Int, Int}(), Dict{Int, Int}(), Dict{Int, Int}(),
+     Vector{Int}(),Vector{Int}(), Vector{Int}(), Vector{Int}(), Vector{Int}()))
+end
+
+function get_mappings(sfn::SFNames)::NTuple{5, Dict{Int, Int}}
+    return sfn.ms, sfn.msv, sfn.mv, sfn.mf, sfn.mp
+end
+
+function get_mapped_vectors(sfn::SFNames)::NTuple{5, Vector{Int}}
+    return sfn.mvs, sfn.mvsv, sfn.mvv, sfn.mvf, sfn.mvp
+end
+
+function get_mappings_infer_links_format(sfn::SFNames)::Dict{Symbol, Vector{Int}}
+    Dict(:S => sfn.mvs, :SV => sfn.mvsv, :V => sfn.mvv, :F => sfn.mvf, :P => sfn.mvp)
+end
+
+function all_unique_names(sfn::SFNames)::Bool # Unnecessary, this is checked in invert_vector
+    return allunique(sfn.snames) && allunique(sfn.svnames) && allunique(vnames) && allunique(fnames) && allunique(pnames)
+end
+
+function no_temp_strat_default_in_names(sfn::SFNames, temp_strat_default)::Bool
+    return temp_strat_default ∉ keys(sfn.s) && temp_strat_default ∉ keys(sfn.sv) && temp_strat_default ∉ keys(sfn.v) && temp_strat_default ∉ keys(sfn.f) && temp_strat_default ∉ keys(sfn.p)
+end
+
+function add_temp_strat_default!(sfn::SFNames, temp_strat_default)
+    push!(sfn.s, temp_strat_default => -1)
+    push!(sfn.sv, temp_strat_default => -1)
+    push!(sfn.v, temp_strat_default => -1)
+    push!(sfn.f, temp_strat_default => -1)
+    push!(sfn.p, temp_strat_default => -1)
+end
+
+function is_all_mapped(sfn::SFNames)::Bool
+    return all(vec -> 0 ∉ vec, get_mapped_vectors(sfn))
+end
+
+function get_names(sfn::SFNames)::NTuple{5, Vector{Symbol}}
+    return sfn.snames, sfn.svnames, sfn.vnames, sfn.fnames, sfn.pnames
+end
+
+
 
 
 """
-    interpret_stratification_notation(mapping_pair::Expr)::Tuple{Vector{DSLArgument}, Vector{DSLArgument}}
+    interpret_stratification_standard_notation(mapping_pair::Expr)::Tuple{Vector{DSLArgument}, Vector{DSLArgument}}
 Take an expression of the form a1, ..., => t <= s1, ..., where every element is a symbol, and return a 2-tuple of form ((a1 => t, a2 => t, ...), (s1 => t, ...))
 """
-function interpret_stratification_notation(mapping_pair::Expr)::Tuple{Vector{DSLArgument}, Vector{DSLArgument}}
+function interpret_stratification_standard_notation(mapping_pair::Expr)::Vector{Vector{DSLArgument}}
     @match mapping_pair begin
 
 
-        :($s => $t <= $a) => return ([DSLArgument(s,t)], [DSLArgument(a,t)])
-        :($s => $t <= $a, $(atail...)) => ([DSLArgument(s,t)], [DSLArgument(a,t) ; [DSLArgument(as,t) for as in atail] ])#return (Dict(unwrap_key_expression(s, t)), push!(Dict(unwrap_key_expression(as, t) for as in atail), unwrap_key_expression(a, t)))
-        :($(shead...), $s => $t <= $a) => ([[DSLArgument(ss, t) for ss in shead] ; DSLArgument(s, t)], [DSLArgument(a, t)])#return (push!(Dict(unwrap_key_expression(ss, t) for ss in shead), unwrap_key_expression(s, t)), Dict(unwrap_key_expression(a, t)))
+        :($s => $t <= $a) => return [[DSLArgument(s,t)], [DSLArgument(a,t)]]
+        :($s => $t <= $a, $(atail...)) => [[DSLArgument(s,t)], [DSLArgument(a,t) ; [DSLArgument(as,t) for as in atail] ]]
+        :($(shead...), $s => $t <= $a) => [[[DSLArgument(ss, t) for ss in shead] ; DSLArgument(s, t)], [DSLArgument(a, t)]]
 
         if mapping_pair.head == :tuple end => begin
             middle_index = findfirst(x -> typeof(x) == Expr && length(x.args) == 3, mapping_pair.args) # still isn't specific enough
@@ -34,9 +107,9 @@ function interpret_stratification_notation(mapping_pair::Expr)::Tuple{Vector{DSL
             end
             @match mapping_pair.args[middle_index] begin
                 :($stail => $t <= $ahead) => begin
-                    sdict = [[DSLArgument(ss, t) for ss in mapping_pair.args[1:middle_index-1]] ; DSLArgument(stail, t)]
-                    adict = [DSLArgument(ahead, t) ; [DSLArgument(as, t) for as in mapping_pair.args[middle_index+1:end]]]
-                    return (sdict, adict)
+                sdict = [[DSLArgument(ss, t) for ss in mapping_pair.args[1:middle_index-1]] ; DSLArgument(stail, t)]
+                adict = [DSLArgument(ahead, t) ; [DSLArgument(as, t) for as in mapping_pair.args[middle_index+1:end]]]
+                    return [sdict, adict]
                 end
                 _ => "Unknown format found for match; middle three values formatted incorrectly."
             end
@@ -47,150 +120,111 @@ end
 
 
 
-
-function read_stratification_line_and_update_dictionaries!(line::Expr, strata_names::Dict{Symbol, Int}, type_names::Dict{Symbol, Int}, aggregate_names::Dict{Symbol, Int}, strata_mappings::Dict{Int, Int}, aggregate_mappings::Dict{Int, Int})
-    current_strata_symbol_dict, current_aggregate_symbol_dict = interpret_stratification_notation(line)
-
-    current_strata_dict = substitute_symbols(strata_names, type_names, current_strata_symbol_dict ; use_flags=true)
-    current_aggregate_dict = substitute_symbols(aggregate_names, type_names, current_aggregate_symbol_dict ; use_flags=true)
-    
-    if STRICT_MATCHES
-        @assert (all(x -> x ∉ keys(strata_mappings), keys(current_strata_dict))) "Attempt to overwrite a mapping in strata!"
-        # check that we're not overwriting a value which has already been assigned
-        merge!(strata_mappings, current_strata_dict) # accumulate dictionary keys
-
-
-        @assert (all(x -> x ∉ keys(aggregate_mappings), keys(current_aggregate_dict))) "Attempt to overwrite a mapping in aggregate!"
-        merge!(aggregate_mappings, current_aggregate_dict)
-
-    else 
-        mergewith!((x, y) -> x, strata_mappings, current_strata_dict) # alternatively, can use: only ∘ first
-        mergewith!((x, y) -> x, aggregate_mappings, current_aggregate_dict)
-    end
-
+function interpret_stratification_generalized_notation(mapping_pair::Expr)::Vector{Vector{DSLArgument}}
+    # asserts are covered before this function is called.
+    other = mapping_pair.args[2].args # needs to be a vector of tuples of symbols
+    type = mapping_pair.args[3] # needs to be a symbol
+    return [((typeof(tup) == Expr) && (tup.head == :tuple)) ? [DSLArgument(sym, type) for sym ∈ tup.args] : [DSLArgument(tup, type)] for tup ∈ other]
 end
 
 
 
 
+
 """
-    @stratify (strata, type, aggregate) begin ... end
-
-    Ok, so the general idea here is:
-    1. Grab all names from strata, type and aggregate, and create dictionaries which map them to their indices
-    2. iterate over each line in the block
-        2a. Split each line into a dictionary which maps all strata to that type and all aggregate to that type
-        2b. Convert from two Symbol => Symbol dictionaries to two Int => Int dictionaries, using the dictionaries from step 1
-            2bα. If applicable, for symbols with TEMP_STRAT_DEFAULT as a prefix, find all matching symbols in the symbol dictionaries, and map all those
-        2c. Accumulate respective dictionaries (optionally, only allow first match vs throw an error (STRICT_MATCHES = false vs true))
-    3. Create an array of 0s for stocks, flows, parameters, dyvars and sums for strata and aggregate.   Insert into arrays all values from the two Int => Int dictionaries
-        3a. If STRICT_MAPPINGS = false, if there only exists one option in type to map to, and it hasn't been explicitly specified, add it.  If STRICT_MAPPINGS = true and it hasn't been specified, throw an error.
-    4. Do a once-over of arrays and ensure there aren't any zeroes (unmapped values) remaining (helps with debugging when you screw up stratifying)
-    5. Deal with attributes (create a copy of type sf with attributes mapped to nothing)
-    6. Infer LS, LSV, etc., if possible.
-    7. Construct strata -> type and aggregate -> type ACSetTransformations
-    8. Return pullback (with flattened attributes)
+Gets mapping information from each line and updates dictionaries.  If a symbol already has a mapping and another is found, keep the first, or throw an error if strict_matches = true.
 """
-function sfstratify(strata::AbstractStockAndFlowStructureF, type::AbstractStockAndFlowStructureF, aggregate::AbstractStockAndFlowStructureF, block::Expr)
+function read_stratification_line_and_update_dictionaries!(line::Expr, other_names::Vector{Dict{Symbol, Int}}, type_names::Dict{Symbol, Int}, other_mappings::Vector{Dict{Int, Int}} ; use_standard_stratification_syntax = true, strict_matches = false, use_flags = true)
+    if use_standard_stratification_syntax
+        interpret_stratification_notation_function = interpret_stratification_standard_notation
+    else
+        interpret_stratification_notation_function = interpret_stratification_generalized_notation
 
-    Base.remove_linenums!(block)
-
-    # STEP 1
+        # need to do this here, since we know the number of other_mappings at this point, but not in the interpret_stratification_notation
+        @assert length(line.args) == 3 
+        @assert typeof(line.args[3]) == Symbol
+        @assert line.args[1] == :(=>)
+        @assert length(line.args[2].args) == length(other_names)
+        @assert all(tup -> typeof(tup) == Symbol || tup.args[1] == :~ || tup.head == :tuple, line.args[2].args) # every element of the vector is an expression of tuple.
+        @assert all(tup -> typeof(tup) == Symbol || tup.args[1] == :~ || all(sym -> typeof(sym) <: Union{Symbol, Expr}, tup.args), line.args[2].args) # ensure all arguments in the tuples are expressions or symbols.
+        # In the future, if we have additional flags, may need to check for them as well.
+        # These asserts are a bit sloppy
+    end
     
-    # invert_vector: Vector{K} -> Dict{K, Int} where int is original index and all K (symbols, in this case) are unique.
-    strata_snames::Dict{Symbol, Int} = invert_vector(snames(strata)) 
-    strata_svnames::Dict{Symbol, Int} = invert_vector(svnames(strata))
-    strata_vnames::Dict{Symbol, Int} = invert_vector(vnames(strata))
-    strata_fnames::Dict{Symbol, Int} = invert_vector(fnames(strata))
-    strata_pnames::Dict{Symbol, Int} = invert_vector(pnames(strata))
+    current_symbol_dict::Vector{Vector{DSLArgument}} = interpret_stratification_notation_function(line)
 
-    type_snames::Dict{Symbol, Int} = invert_vector(snames(type))
-    type_svnames::Dict{Symbol, Int} = invert_vector(svnames(type))
-    type_vnames::Dict{Symbol, Int} = invert_vector(vnames(type))
-    type_fnames::Dict{Symbol, Int} = invert_vector(fnames(type))
-    type_pnames::Dict{Symbol, Int} = invert_vector(pnames(type))
+    current_mapping_dict::Vector{Dict{Int, Int}} = ((x, y) -> substitute_symbols(x,type_names, y; use_flags=use_flags)).(other_names, current_symbol_dict)
 
-    aggregate_snames::Dict{Symbol, Int} = invert_vector(snames(aggregate))
-    aggregate_svnames::Dict{Symbol, Int} = invert_vector(svnames(aggregate))
-    aggregate_vnames::Dict{Symbol, Int} = invert_vector(vnames(aggregate))
-    aggregate_fnames::Dict{Symbol, Int} = invert_vector(fnames(aggregate))
-    aggregate_pnames::Dict{Symbol, Int} = invert_vector(pnames(aggregate))
+    ((cumulative_dict, new_dict) -> mergewith!((cv, nv) -> cv, cumulative_dict, new_dict)).(other_mappings, current_mapping_dict)
 
+end
 
-    strata_stock_mappings_dict::Dict{Int, Int} = Dict()
-    strata_flow_mappings_dict::Dict{Int, Int} = Dict()
-    strata_dyvar_mappings_dict::Dict{Int, Int} = Dict()
-    strata_param_mappings_dict::Dict{Int, Int} = Dict()
-    strata_sum_mappings_dict::Dict{Int, Int} = Dict()
+"""
+Print all symbols such that the corresponding int is 0, representing an unmapped object.
+"""
+function print_unmapped(SFNames, name="STOCKFLOW")
+    for (indices, names) ∈ zip(SFNames.get_mapped_vectors, SFNames.get_names)
+        for (i, val) ∈ enumerate(indices)
+            if val == 0
+                println("UNMAPPED IN $(name):")
+                println(names[i])
+            end
+        end
+    end
+end
+
+"""
+Iterates over each line in a stratification syntax block and updates the appropriate dictionaries.
+"""
+function iterate_over_stratification_lines!(block, other_names::Vector{SFNames}, type_names::SFNames; use_standard_stratification_syntax=true, strict_matches=false, use_flags=true)
     
-    aggregate_stock_mappings_dict::Dict{Int, Int} = Dict()
-    aggregate_flow_mappings_dict::Dict{Int, Int} = Dict()
-    aggregate_dyvar_mappings_dict::Dict{Int, Int} = Dict()
-    aggregate_param_mappings_dict::Dict{Int, Int} = Dict()
-    aggregate_sum_mappings_dict::Dict{Int, Int} = Dict()
-    
-
-    strata_all_names = [snames(strata), svnames(strata), vnames(strata), fnames(strata), pnames(strata)]
-    type_all_names = [snames(type), svnames(type), vnames(type), fnames(type), pnames(type)]
-    aggregate_all_names = [snames(aggregate), svnames(aggregate), vnames(aggregate), fnames(aggregate), pnames(aggregate)]
-
-    @assert all(x -> TEMP_STRAT_DEFAULT ∉ keys(x), strata_all_names) "Strata contains $TEMP_STRAT_DEFAULT !  Please change TEMP_STRAT_DEFAULT to a different symbol or rename offending object."
-    @assert all(x -> TEMP_STRAT_DEFAULT ∉ keys(x), type_all_names) "Type contains $TEMP_STRAT_DEFAULT !  Please change TEMP_STRAT_DEFAULT to a different symbol or rename offending object."
-    @assert all(x -> TEMP_STRAT_DEFAULT ∉ keys(x), aggregate_all_names) "Aggregate contains $TEMP_STRAT_DEFAULT !  Please change TEMP_STRAT_DEFAULT to a different symbol or rename offending object."
-
-    map(x -> (push!(x, (TEMP_STRAT_DEFAULT => -1))), [strata_snames, strata_svnames, strata_vnames, strata_fnames, strata_pnames])
-    map(x -> (push!(x, (TEMP_STRAT_DEFAULT => -1))), [type_snames, type_svnames, type_vnames, type_fnames, type_pnames])
-    map(x -> (push!(x, (TEMP_STRAT_DEFAULT => -1))), [aggregate_snames, aggregate_svnames, aggregate_vnames, aggregate_fnames, aggregate_pnames])
-
-
-    # STEP 2
     current_phase = (_, _) -> ()
     for statement in block.args
         @match statement begin
             QuoteNode(:stocks) => begin
-                current_phase = s -> read_stratification_line_and_update_dictionaries!(s, strata_snames, type_snames, aggregate_snames, strata_stock_mappings_dict, aggregate_stock_mappings_dict)
+                current_phase = s -> read_stratification_line_and_update_dictionaries!(s, (getfield.(other_names, :s))::Vector{Dict{Symbol, Int}}, type_names.s, (getfield.(other_names, :ms))::Vector{Dict{Int, Int}}; use_standard_stratification_syntax=use_standard_stratification_syntax, strict_matches=strict_matches, use_flags=use_flags)
             end
-            QuoteNode(:parameters) => begin
-                current_phase = p -> read_stratification_line_and_update_dictionaries!(p, strata_pnames, type_pnames, aggregate_pnames, strata_param_mappings_dict, aggregate_param_mappings_dict)
-            end
-            QuoteNode(:dynamic_variables) => begin
-                current_phase = v -> read_stratification_line_and_update_dictionaries!(v, strata_vnames, type_vnames, aggregate_vnames, strata_dyvar_mappings_dict, aggregate_dyvar_mappings_dict)
-            end            
-            QuoteNode(:flows) => begin
-                current_phase = f -> read_stratification_line_and_update_dictionaries!(f, strata_fnames, type_fnames, aggregate_fnames, strata_flow_mappings_dict, aggregate_flow_mappings_dict)
-            end                    
-                  
             QuoteNode(:sums) => begin
-                current_phase = sv -> read_stratification_line_and_update_dictionaries!(sv, strata_svnames, type_svnames, aggregate_svnames, strata_sum_mappings_dict, aggregate_sum_mappings_dict)
+                current_phase = sv -> read_stratification_line_and_update_dictionaries!(sv, (getfield.(other_names, :sv))::Vector{Dict{Symbol, Int}}, type_names.sv, (getfield.(other_names, :msv))::Vector{Dict{Int, Int}}; use_standard_stratification_syntax=use_standard_stratification_syntax, strict_matches=strict_matches, use_flags=use_flags)
+            end        
+            QuoteNode(:dynamic_variables) => begin
+                current_phase = v -> read_stratification_line_and_update_dictionaries!(v, (getfield.(other_names, :v))::Vector{Dict{Symbol, Int}}, type_names.v, (getfield.(other_names, :mv))::Vector{Dict{Int, Int}}; use_standard_stratification_syntax=use_standard_stratification_syntax, strict_matches=strict_matches, use_flags=use_flags)
+            end       
+            QuoteNode(:flows) => begin
+                current_phase = f -> read_stratification_line_and_update_dictionaries!(f, (getfield.(other_names, :f))::Vector{Dict{Symbol, Int}}, type_names.f, (getfield.(other_names, :mf))::Vector{Dict{Int, Int}}; use_standard_stratification_syntax=use_standard_stratification_syntax, strict_matches=strict_matches, use_flags=use_flags)
             end                    
+            QuoteNode(:parameters) => begin
+                current_phase = p -> read_stratification_line_and_update_dictionaries!(p, (getfield.(other_names, :p))::Vector{Dict{Symbol, Int}}, type_names.p, (getfield.(other_names, :mp))::Vector{Dict{Int, Int}}; use_standard_stratification_syntax=use_standard_stratification_syntax, strict_matches=strict_matches, use_flags=use_flags)
+            end
             QuoteNode(kw) =>
                 error("Unknown block type for stratify syntax: " * String(kw))
             _ => current_phase(statement)
         end
     end
+end
 
-
+"""
+Apply default mappings, infer mapping if there's only a single option, and convert from Dict{Int, Int} to Vector{Int}
+"""
+function complete_mappings!(sfm::SFNames, sftype::SFNames; strict_mappings = false)
     # get the default value, if it has been assigned.  Use 0 if it hasn't.
-    default_index_strata_stock = get(strata_stock_mappings_dict, -1, 0)
-    default_index_strata_flow = get(strata_flow_mappings_dict, -1, 0)
-    default_index_strata_dyvar = get(strata_dyvar_mappings_dict, -1, 0)
-    default_index_strata_param = get(strata_param_mappings_dict, -1, 0)
-    default_index_strata_sum = get(strata_sum_mappings_dict, -1, 0)
+    all_index_mappings = get_mappings(sfm)
 
-    default_index_aggregate_stock = get(aggregate_stock_mappings_dict, -1, 0)
-    default_index_aggregate_flow = get(aggregate_flow_mappings_dict, -1, 0)
-    default_index_aggregate_dyvar = get(aggregate_dyvar_mappings_dict, -1, 0)
-    default_index_aggregate_param = get(aggregate_param_mappings_dict, -1, 0)
-    default_index_aggregate_sum = get(aggregate_sum_mappings_dict, -1, 0)
+    default_index_stock = get(all_index_mappings[1], -1, 0)
+    default_index_sum = get(all_index_mappings[2], -1, 0)
+    default_index_dyvar = get(all_index_mappings[3], -1, 0)
+    default_index_flow = get(all_index_mappings[4], -1, 0)
+    default_index_param = get(all_index_mappings[5], -1, 0)
+
 
 
     # STEP 3
-    if !STRICT_MAPPINGS
-        one_type_stock = length(snames(type)) == 1 ? 1 : 0 # if there is only one stock, it needs to have index 1
-        one_type_flow = length(fnames(type)) == 1 ? 1 : 0
-        one_type_dyvar = length(vnames(type)) == 1 ? 1 : 0
-        one_type_param = length(pnames(type)) == 1 ? 1 : 0
-        one_type_sum = length(svnames(type)) == 1 ? 1 : 0
+    if !strict_mappings
+        one_type_stock = length(sftype.snames) == 1 ? 1 : 0 # if there is only one stock, it needs to have index 1
+        one_type_flow = length(sftype.fnames) == 1 ? 1 : 0
+        one_type_dyvar = length(sftype.vnames) == 1 ? 1 : 0
+        one_type_param = length(sftype.pnames) == 1 ? 1 : 0
+        one_type_sum = length(sftype.svnames) == 1 ? 1 : 0
     else
         one_type_stock = one_type_flow = one_type_dyvar = one_type_param = one_type_sum = 0
     end
@@ -202,45 +236,69 @@ function sfstratify(strata::AbstractStockAndFlowStructureF, type::AbstractStockA
     # - If only one_type is mapped, then it will be positive, and default_infex will be 0
     # - If only default_index is mapped, it will be positive and one_type will be 0
 
-    strata_stock_mappings::Vector{Int} = [get(strata_stock_mappings_dict, i, max(default_index_strata_stock, one_type_stock))  for i in 1:ns(strata)]
-    strata_flow_mappings::Vector{Int} =  [get(strata_flow_mappings_dict, i, max(default_index_strata_flow, one_type_flow))  for i in 1:nf(strata)]
-    strata_dyvar_mappings::Vector{Int} = [get(strata_dyvar_mappings_dict, i, max(default_index_strata_dyvar, one_type_dyvar))  for i in 1:nvb(strata)]
-    strata_param_mappings::Vector{Int} = [get(strata_param_mappings_dict, i,  max(default_index_strata_param, one_type_param))  for i in 1:np(strata)]
-    strata_sum_mappings::Vector{Int} =  [get(strata_sum_mappings_dict, i,  max(default_index_strata_sum, one_type_sum))  for i in 1:nsv(strata)]
+    stock_mappings::Vector{Int} = [get(all_index_mappings[1], i, max(default_index_stock, one_type_stock))  for i ∈ eachindex(sfm.snames)]
+    sum_mappings::Vector{Int} =  [get(all_index_mappings[2], i,  max(default_index_sum, one_type_sum))  for i ∈ eachindex(sfm.svnames)]
+    dyvar_mappings::Vector{Int} = [get(all_index_mappings[3], i, max(default_index_dyvar, one_type_dyvar))  for i ∈ eachindex(sfm.vnames)]
+    flow_mappings::Vector{Int} =  [get(all_index_mappings[4], i, max(default_index_flow, one_type_flow))  for i ∈ eachindex(sfm.fnames)]
+    param_mappings::Vector{Int} = [get(all_index_mappings[5], i,  max(default_index_param, one_type_param))  for i ∈ eachindex(sfm.pnames)]
 
-    aggregate_stock_mappings::Vector{Int} = [get(aggregate_stock_mappings_dict, i, max(default_index_aggregate_stock, one_type_stock))  for i in 1:ns(aggregate)]
-    aggregate_flow_mappings::Vector{Int} =  [get(aggregate_flow_mappings_dict, i, max(default_index_aggregate_flow, one_type_flow))  for i in 1:nf(aggregate)]
-    aggregate_dyvar_mappings::Vector{Int} = [get(aggregate_dyvar_mappings_dict, i, max(default_index_aggregate_dyvar, one_type_dyvar))  for i in 1:nvb(aggregate)]
-    aggregate_param_mappings::Vector{Int} = [get(aggregate_param_mappings_dict, i,  max(default_index_aggregate_param, one_type_param))  for i in 1:np(aggregate)]
-    aggregate_sum_mappings::Vector{Int} =  [get(aggregate_sum_mappings_dict, i,  max(default_index_aggregate_sum, one_type_sum))  for i in 1:nsv(aggregate)]
+    append!(sfm.mvs, stock_mappings)
+    append!(sfm.mvsv, sum_mappings)
+    append!(sfm.mvv, dyvar_mappings)
+    append!(sfm.mvf, flow_mappings)
+    append!(sfm.mvp, param_mappings)
+
+end
 
 
-    # This bit is a bit verbose, but makes debugging when making a stratification easier.  Tells you exactly which ones you forgot to map.
+"""
+    sfstratify(strata, type, aggregate, block ; kwargs)
 
-    all_mappings = [strata_stock_mappings..., strata_flow_mappings..., strata_dyvar_mappings..., strata_param_mappings..., strata_sum_mappings..., aggregate_stock_mappings..., aggregate_flow_mappings..., aggregate_dyvar_mappings..., aggregate_param_mappings..., aggregate_sum_mappings...]
-    
-    strata_mappings = [strata_stock_mappings => snames(strata), strata_flow_mappings => fnames(strata), strata_dyvar_mappings => vnames(strata), strata_param_mappings => pnames(strata), strata_sum_mappings => svnames(strata)]
-    aggregate_mappings = [aggregate_stock_mappings => snames(aggregate), aggregate_flow_mappings => fnames(aggregate), aggregate_dyvar_mappings => vnames(aggregate), aggregate_param_mappings => pnames(aggregate), aggregate_sum_mappings => svnames(aggregate)]
+    1. Grab all names from strata, type and aggregate, and create dictionaries which map them to their indices
+    2. Iterate over each line in the block
+        2a. Split each line into a dictionary which maps all strata to that type and all aggregate to that type
+        2b. Convert from two Symbol => Symbol dictionaries to two Int => Int dictionaries, using the dictionaries from step 1
+            2bα. If applicable, for symbols with ~ as a prefix, find all symbols with matching substrings in the symbol dictionaries, and map all those
+        2c. Accumulate respective dictionaries (optionally, only allow first match vs throw an error (strict_matches = false vs true))
+    3. Create an array of 0s for stocks, flows, parameters, dyvars and sums for strata and aggregate.   Insert into arrays all values from the two Int => Int dictionaries
+        3a. If strict_mappings = false, if there only exists one option in type to map to, and it hasn't been explicitly specified, add it.  If strict_mappings = true and it hasn't been specified, throw an error.
+    4. Do a once-over of arrays and ensure there aren't any zeroes (unmapped values) remaining (helps with debugging when you screw up stratifying)
+    5. Deal with attributes (create a copy of type sf with attributes mapped to nothing)
+    6. Infer LS, LSV, etc.
+    7. Construct strata -> type and aggregate -> type ACSetTransformations
+    8. Return pullback (with flattened attributes)
+"""
+function sfstratify(others::Vector{K}, type::K, block::Expr ; use_standard_stratification_syntax = true, strict_mappings = false, strict_matches = false, temp_strat_default = :_, use_temp_strat_default = true, use_flags = true, return_homs = false) where {K <: AbstractStockAndFlowStructureF}
+
+    Base.remove_linenums!(block)
+
+    # STEP 1
+
+
+    other_names::Vector{SFNames} = [SFNames(sf) for sf ∈ others]
+    type_names::SFNames = SFNames(type) # has some unnecessary fields.
+
+    if use_temp_strat_default
+        # Applies function to every element in vector.
+        @assert all((sfn -> no_temp_strat_default_in_names(sfn, temp_strat_default)).(other_names)) && no_temp_strat_default_in_names(type_names, temp_strat_default) "A stockflow contains $(temp_strat_default) !  Please change temp_strat_default to a different symbol or rename offending object."
+        (sfn -> add_temp_strat_default!(sfn, temp_strat_default)).(other_names)
+    end
+
+
+    # STEP 2
+    iterate_over_stratification_lines!(block, other_names, type_names ; use_standard_stratification_syntax=use_standard_stratification_syntax, strict_matches=strict_matches, use_flags=use_flags)
+
+
+    (sfn -> complete_mappings!(sfn, type_names ; strict_mappings=strict_mappings)).(other_names)
 
     # STEP 4
 
+    # This bit makes debugging when making a stratification easier.  Tells you exactly which ones you forgot to map.
+
     #unmapped: 
-    if !(all(x -> x != 0, all_mappings))
-        for (ints, dicts) in strata_mappings
-            for (i, val) in enumerate(ints)
-                if val == 0
-                    println("UNMAPPED IN STRATA:")
-                    println(dicts[i])
-                end
-            end
-        end
-        for (ints, dicts) in aggregate_mappings
-            for (i, val) in enumerate(ints)
-                if val == 0
-                    println("UNMAPPED IN AGGREGATE:")
-                    println(dicts[i])
-                end
-            end
+    if !(all(is_all_mapped.(other_names)))
+        for i ∈ eachindex(other_names)
+            print_unmapped(other_names[i], "STOCKFLOW $i")
         end
         error("There is an unmapped value!")
     end
@@ -266,30 +324,118 @@ function sfstratify(strata::AbstractStockAndFlowStructureF, type::AbstractStockA
     #  A'<- C'-> B'
     #
     
-    strata_necmaps = Dict(:S => strata_stock_mappings, :F => strata_flow_mappings, :V => strata_dyvar_mappings, :P => strata_param_mappings, :SV => strata_sum_mappings)    
-    strata_inferred_links = infer_links(strata, type, strata_necmaps)
-    strata_to_type = ACSetTransformation(strata, no_attribute_type; strata_necmaps..., strata_inferred_links..., Op = NothingFunction, Position = NothingFunction, Name = NothingFunction)
-
-    
-    aggregate_necmaps = Dict(:S => aggregate_stock_mappings, :F => aggregate_flow_mappings, :V => aggregate_dyvar_mappings, :P => aggregate_param_mappings, :SV => aggregate_sum_mappings)
-    aggregate_inferred_links = infer_links(aggregate, type, aggregate_necmaps)
-    aggregate_to_type = ACSetTransformation(aggregate, no_attribute_type; aggregate_necmaps..., aggregate_inferred_links..., Op = NothingFunction, Position = NothingFunction, Name =NothingFunction)
-
-    
+    generate_all_mappings_function = m -> Dict(infer_links(m.sf, type, get_mappings_infer_links_format(m))..., get_mappings_infer_links_format(m)..., :Op => NothingFunction, :Position => NothingFunction, :Name => NothingFunction)
+    all_mappings = generate_all_mappings_function.(other_names)
+   
+    all_transformations = [ACSetTransformation(sfn.sf, no_attribute_type ; mappings...) for (sfn, mappings) ∈ zip(other_names, all_mappings)]
 
     # STEP 8
-    pullback_model = pullback(strata_to_type, aggregate_to_type) |> apex |> rebuildStratifiedModelByFlattenSymbols;
 
-    if RETURN_HOMS
-        return pullback_model, strata_to_type, aggregate_to_type
+    pullback_model = pullback(all_transformations) |> apex |> rebuildStratifiedModelByFlattenSymbols;
+
+    if return_homs
+        return pullback_model, all_transformations
     else
         return pullback_model
     end
     
 end
 
+"""
+    stratify(strata, type, aggregate, block)
+Take three stockflows and a block describing where the first and third map on to the second, and get a new stratified stockflow.
+Left side are strata objects, middle are type, right are aggregate.  Each strata and aggregate object is associated with one type object.
+The resultant stockflow contains objects which are the product of strata and aggregate objects which map to the same type object.
+Use _ to match all objects in that category, ~ as a prefix to match all objects with the following string as a substring.  Objects always go with their first match.
+If the type model has a single object in a category, the mapping to it is automatically assumed.  In the below example, we wouldn't need to specify :stocks or :sums.
+
+```julia
+
+@stratify WeightModel l_type ageWeightModel begin
+    :stocks
+    _ => pop <= _
+    
+    :flows
+    ~Death => f_death <= ~Death
+    ~id => f_aging <= ~aging
+    ~Becoming => f_fstOrder <= ~id
+    _ => f_birth <= f_NB
+
+    
+    :dynamic_variables
+    v_NewBorn => v_birth <= v_NB
+    ~Death => v_death <= ~Death
+    ~id  => v_aging <= v_agingCA, v_agingAS
+    v_BecomingOverWeight, v_BecomingObese => v_fstOrder <= v_idC, v_idA, v_idS
+    
+    :parameters
+    μ => μ <= μ
+    δw, δo => δ <= δC, δA, δS
+    rw, ro => rFstOrder <= r
+    rage => rage <= rageCA, rageAS
+    
+    :sums
+    N => N <= N
+    
+end 
+```
+"""
+macro stratify(strata, type, aggregate, block)
+    escaped_block = Expr(:quote, block)
+    quote
+        sfstratify([$(esc(strata)), $(esc(aggregate))], $(esc(type)), $(esc(escaped_block)))
+    end
+end
 
 
+"""
+Alternate syntax for stratification, allows for an arbitrary number of stockflows in a pullback.
+Second last argument must be the type stockflow, last must be the block describing how the stratificaition is done.  All arguments before that must be stockflows.
+
+```julia
+
+@n_stratify WeightModel ageWeightModel l_type begin
+    :stocks
+    [_, _] => pop
+    
+    :flows
+    [~Death, ~Death] => f_death
+    [~id, ~aging] => f_aging 
+    [~Becoming, ~id] => f_fstOrder
+    [_, f_NB] => f_birth
+
+    
+    :dynamic_variables
+    [v_NewBorn, v_NB] => v_birth
+    [~Death, ~Death] => v_death
+    [~id, (v_agingCA, v_agingAS)] => v_aging
+    [(v_BecomingOverWeight, v_BecomingObese), (v_idC, v_idA, v_idS)] => v_fstOrder
+    
+    :parameters
+    [μ, μ] => μ
+    [(δw, δo), (δC, δA, δS)] => δ
+    [(rw, ro), r] => rFstOrder
+    [rage, (rageCA, rageAS)] => rage
+    
+    :sums
+    [N,N] => N
+end
+
+```
+
+"""
+macro n_stratify(args...)
+    if length(args) < 3
+        return :(MethodError("Too few arguments provided!  Please provide some number of stockflows, then the type stock flow, then a quote block."))
+    else
+        escaped_block = Expr(:quote, args[end])
+        other_sfs = esc.(args[1:end-2])
+        type = (esc(args[end-1]))
+        quote
+            sfstratify([$(other_sfs...)], $type, $escaped_block ; use_standard_stratification_syntax = false)
+        end
+    end
+end
 
 
 end

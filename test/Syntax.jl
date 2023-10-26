@@ -268,16 +268,23 @@ end
 
 end
 @testset "recursive definitions should be disallowed" begin
-    expr = quote
+    @test_throws Exception @stock_and_flow begin
         :dynamic_variables
         v = v + v
     end
-    # When used as a macro -- @stock_and_flow -- this exception is thrown
-    # at a point that @test_throws cannot capture it.
-    @test_throws Exception stock_and_flow(expr)
 end
 
+@testset "the existence of references is checked" begin
+    @test_throws Exception @stock_and_flow begin
+        :stocks
+        A
+        B
+        C
 
+        :flows
+        a => f(A * B) => B
+    end
+end
 
 @testset "foot syntax can create all types of feet" begin
     @test (@foot A => B) == foot(:A, :B, :A => :B)
@@ -285,7 +292,7 @@ end
     @test (@foot () => Q) == foot((), :Q, ())
     @test (@foot () => ()) == foot((),(),())
 
-    @test (@foot =>((), SV)) == foot((),:SV,()) 
+    @test (@foot =>((), SV)) == foot((),:SV,())
     @test (@foot A11 => B22) == foot(:A11, :B22, :A11 => :B22)
 
     @test (@foot () => B, A => ()) == foot(:A, :B, ())
@@ -312,7 +319,7 @@ end
 @testset "feet syntax can create feet" begin
 
     @test (@feet begin
-        
+
         A => B
         C => D
         () => ()
