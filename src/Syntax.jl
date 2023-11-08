@@ -1049,18 +1049,27 @@ end
 #############################################
 
 """
-    infer_particular_link!(sfsrc, sftgt, f1, f2, map1, map2, destination_vector, posf=nothing)
+    infer_particular_link!(sfsrc, sftgt, f1, f2, map1, map2, destination_vector)
 
-infer_particular_link!(sfsrc, sftgt, get_lvs, get_lvv, stockmaps, dyvarmaps, lvmaps, get_lvvposition) # LV
+infer_particular_link!(sfsrc, sftgt, get_lvs, get_lvv, stockmaps, dyvarmaps, lvmaps) # LV
 
 If we're mapping the same value to multiple positions, it doesn't matter which one goes where.
 We have a few options, on how we want to distribute mappings.  Way it's done here, always goes to the last position.
 
 """
 function infer_particular_link!(sfsrc, sftgt, f1, f2, map1, map2, destination_vector)
-        
+    # all the morphisms in target for some mapping
     hom1′_mappings = f1(sftgt)
     hom2′_mappings = f2(sftgt)
+
+    """
+    Ok
+    We create a dictionary which maps (hom1, hom2) -> val in tgt
+    for instance, is, ifn -> inflow
+    Then we iterate over is and ifn in the source, and therefore also inflow,
+    then use the mappings we have for is and ifn to find the mapping for inflow
+    """
+         
 
     tgt::Dict{Tuple{Int, Int}, Int} = Dict((hom1′, hom2′) => i for (i, (hom1′, hom2′)) in enumerate(zip(hom1′_mappings, hom2′_mappings))) # ISSUE: If there are two matches, second one overwrites the first.
     # SOLUTION: Who cares.  Just map to the last.
