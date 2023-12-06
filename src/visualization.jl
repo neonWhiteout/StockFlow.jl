@@ -239,21 +239,27 @@ function Graph(c::CausalLoop)
 
 end
 
-function Graph(c::CausalLoopF)
+function Graph(c::CausalLoopF; schema="C")
 
   NNodes = [Node("n$n", Attributes(:label=>"$(nname(c, n))",:shape=>"plaintext")) for n in 1:nn(c)]
 
-  Edges=map(1:ne(c)) do k
-    pol_int = epol(c,k)
-    if pol_int > 0
-      pol = :+
-    elseif pol_int < 0
-      pol = :-
-    else
-      pol = 0
-    end
-    [Edge(["n$(sedge(c,k))", "n$(tedge(c,k))"],Attributes(:color=>"blue",:label=>"$(pol)"))]
-  end |> flatten |> collect
+  if schema == "C"
+    Edges=map(1:ne(c)) do k
+      pol_int = epol(c,k)
+      if pol_int > 0
+        pol = :+
+      elseif pol_int < 0
+        pol = :-
+      else
+        pol = 0
+      end
+      [Edge(["n$(sedge(c,k))", "n$(tedge(c,k))"],Attributes(:color=>"blue",:label=>"$(pol)"))]
+    end |> flatten |> collect
+  elseif schema == "C0"
+    Edges=map(1:ne(c)) do k
+      [Edge(["n$(sedge(c,k))", "n$(tedge(c,k))"],Attributes(:color=>"blue"))]
+    end |> flatten |> collect
+  end
 
   stmts=vcat(NNodes,Edges)
 
