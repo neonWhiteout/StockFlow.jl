@@ -239,6 +239,30 @@ function Graph(c::CausalLoop)
 
 end
 
+function Graph(c::CausalLoopF)
+
+  NNodes = [Node("n$n", Attributes(:label=>"$(nname(c, n))",:shape=>"plaintext")) for n in 1:nn(c)]
+
+  Edges=map(1:ne(c)) do k
+    pol_int = epol(c,k)
+    if pol_int > 0
+      pol = :+
+    elseif pol_int < 0
+      pol = :-
+    else
+      pol = 0
+    end
+    [Edge(["n$(sedge(c,k))", "n$(tedge(c,k))"],Attributes(:color=>"blue",:label=>"$(pol)"))]
+  end |> flatten |> collect
+
+  stmts=vcat(NNodes,Edges)
+
+  g = Graphviz.Digraph("G", stmts;graph_attrs=Attributes(:rankdir=>"LR"))
+  return g
+
+end
+
+
 
 
 function GraphF(p::AbstractStockAndFlow0; make_stock::Function=def_stock, make_auxiliaryV::Function=def_auxiliaryVF,
