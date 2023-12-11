@@ -11,7 +11,7 @@ vsstock, vssv, svsstockAllF, vsstockAllF, vssvAllF, StockAndFlowUntyped, StockAn
 object_shift_right, foot, leg, lsnames, OpenStockAndFlow, OpenStockAndFlowOb, fv, fvs, nlvv, nlpv, vtgt, vsrc, vpsrc, vptgt, pname, pnames, make_v_expr,
 vop, lvvposition, lvtgtposition, lsvvposition, lpvvposition, recreate_stratified, set_snames!, set_fnames!, set_svnames!, set_vnames!, set_pnames!, set_sname!, set_fname!, set_svname!, set_vname!, set_pname!,
 get_lss, get_lssv, get_lsvsv, get_lsvv, get_lvs, get_lvv, get_is, get_ifn, get_os, get_ofn, get_lpvp, get_lpvv, get_lvsrc, get_lvtgt, get_links,
-make_v_expr_nonrecursive, get_lpvpposition, get_lvsrcposition, get_lsvsvposition, get_lvsposition
+make_v_expr_nonrecursive, get_lpvpposition, get_lvsrcposition, get_lsvsvposition, get_lvsposition, StockAndFlowFUnits
 
 
 using Catlab
@@ -208,9 +208,63 @@ const StockAndFlowStructureF = StockAndFlowStructureFUntyped{Symbol}
   lpvpposition::Attr(LPV, Position)
 end
 
+@present TheoryStockAndFlowFUnits <: TheoryStockAndFlowF begin
+
+  Exponent::AttrType
+
+  U::Ob
+  CU::Ob
+  LUCU::Ob
+
+  # LCUS::Ob
+  # LCUV::Ob
+  # LCUSV::Ob
+  # LCUF::Ob
+  # LCUP::Ob
+
+
+  uname::Attr(U, Name)
+  exp::Attr(LUCU, Exponent)
+  
+
+  lucuu::Hom(LUCU, U)
+  lucucu::Hom(LUCU, CU)
+
+  scu::Hom(S, CU)
+  svcu::Hom(SV, CU)
+  fcu::Hom(F, CU)
+  vcu::Hom(V, CU)
+  pcu::Hom(P, CU)
+
+  # lcuscu::Hom(LCUS, CU)
+  # lcuss::Hom(LCUS, S)
+  # lcuvcu::Hom(LCUV, CU)
+  # lcuvv::Hom(LCUV, V)
+  # lcusvcu::Hom(LCUSV, CU)
+  # lcusvsv::Hom(LCUSV, SV)
+  # lcufcu::Hom(LCUF, CU)
+  # lcuff::Hom(LCUF, F)
+  # lcpcu::Hom(LCUP, CU)
+  # lcupp::Hom(LCUP, P)
+
+  # cus::Hom(CU, S)
+  # cusv::Hom(CU, SV)
+  # cuf::Hom(CU, F)
+  # cuv::Hom(CU, V)
+  # cup::Hom(CU, P)
+
+end
+
+
+
 @abstract_acset_type AbstractStockAndFlowF <: AbstractStockAndFlowStructureF
 @acset_type StockAndFlowFUntyped(TheoryStockAndFlowF, index=[:is,:os,:ifn,:ofn,:fv,:lvs,:lvv,:lsvsv,:lsvv,:lss,:lssv,:lvsrc,:lvtgt,:lpvp,:lpvv]) <: AbstractStockAndFlowF
 const StockAndFlowF = StockAndFlowFUntyped{Symbol,Symbol,Int8}
+
+@acset_type StockAndFlowFUnitsUntyped(TheoryStockAndFlowFUnits, index=[:is,:os,:ifn,:ofn,:fv,:lvs,:lvv,:lsvsv,:lsvv,:lss,:lssv,:lvsrc,:lvtgt,:lpvp, :lpvv, :lucuu, :lucucu, :scu, :svcu, :fcu, :vcu, :pcu]) <: AbstractStockAndFlowF
+const StockAndFlowFUnits = StockAndFlowFUnitsUntyped{Symbol,Symbol,Int8,Int8}
+
+
 
 # functions of adding components of the model schema
 add_flow!(p::AbstractStockAndFlowStructure,v;kw...) = add_part!(p,:F;fv=v,kw...)
@@ -593,6 +647,93 @@ StockAndFlowF(s,p,v,f,sv) = begin
   end
   sf
 end
+
+
+
+
+
+
+
+
+
+StockAndFlowFUnits(s,p,v,f,sv) = begin
+  sf = StockAndFlowFUnits()
+
+  s = vectorify(s)
+  f = vectorify(f)
+  v = vectorify(v)
+  p = vectorify(p)
+  sv = vectorify(sv)
+
+  sname = map(first,s)
+  fname = map(first,f)
+  vname = map(first,v)
+
+  op=map(last,map(last,v))
+
+  s_idx = state_dict(sname)
+  f_idx = state_dict(fname)
+  v_idx = state_dict(vname)
+  p_idx = state_dict(p)
+  sv_idx = state_dict(sv)
+
+  add_parameters!(sf,length(p),pname=p)
+  add_svariables!(sf, length(sv), svname=sv)
+  add_variables!(sf, length(vname), vname=vname, vop=op)
+  add_flows!(sf,map(x->v_idx[x], map(last,f)),length(fname),fname=fname)
+
+
+  # Parse the elements included in "s" -- stocks
+  for (i, (name,(ins,outs,svs))) in enumerate(s)
+    i = add_stock!(sf,sname=name) # add objects :S (stocks)
+    ins=vectorify(ins) # inflows of each stock
+    outs=vectorify(outs) # outflows of each stock
+    svs=vectorify(svs) # sum auxiliary variables depends on the stock
+    # filter out the fake (empty) elements
+    ins = ins[ins .!= FK_FLOW_NAME]
+    outs = outs[outs .!= FK_FLOW_NAME]
+    svs = svs[svs .!= FK_SVARIABLE_NAME]
+
+    if length(ins)>0
+      add_inflows!(sf, length(ins), repeat([i], length(ins)), map(x->f_idx[x], ins)) # add objects :I (inflows)
+    end
+    if length(outs)>0
+      add_outflows!(sf, length(outs), repeat([i], length(outs)), map(x->f_idx[x], outs)) # add objects :O (outflows)
+    end
+    if length(svs)>0
+      add_Slinks!(sf, length(svs), repeat([i], length(svs)), map(x->sv_idx[x], svs)) # add objects :LS (links from Stock to sum dynamic variable)
+    end
+  end
+
+  # Parse the elements included in "v" -- auxiliary vairables
+  for (vn,(args,op)) in v
+
+    args=vectorify(args)
+#    @assert op in Operators[length(args)]
+
+    for (i,arg) in enumerate(args)
+      if arg in sname
+        add_Vlink!(sf, s_idx[arg], v_idx[vn], lvsposition=i)
+      elseif arg in vname
+        add_VVlink!(sf, v_idx[arg], v_idx[vn], lvsrcposition=i)
+      elseif arg in p
+        add_Plink!(sf, p_idx[arg], v_idx[vn], lpvpposition=i)
+      elseif arg in sv
+        add_SVlink!(sf, sv_idx[arg], v_idx[vn], lsvsvposition=i)
+      else
+        error("arg: " * string(arg) * " does not belong to any stock, auxilliary variable, constant parameter or sum auxilliary variable!")
+      end
+    end
+  end
+  sf
+end
+
+
+
+
+
+
+
 
 """ return the stocks name with index of s """
 sname(p::AbstractStockAndFlow0,s) = subpart(p,s,:sname) 
