@@ -1392,7 +1392,13 @@ macro stock_and_flow_units(block)
                 end
             else
                 for arg in expr.args[2:end]
-                    if arg ∉ keys(units)
+                    if typeof(arg) == Expr
+                        for subarg in arg.args[2:end]
+                            if subarg ∉ keys(units)
+                                push!(units, subarg => length(units)+1)
+                            end
+                        end
+                    elseif arg ∉ keys(units)
                         push!(units, arg => length(units)+1)
                     end
                 end
