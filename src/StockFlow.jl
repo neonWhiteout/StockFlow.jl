@@ -208,6 +208,9 @@ const StockAndFlowStructureF = StockAndFlowStructureFUntyped{Symbol}
   lpvpposition::Attr(LPV, Position)
 end
 
+
+
+
 @abstract_acset_type AbstractStockAndFlowF <: AbstractStockAndFlowStructureF
 @acset_type StockAndFlowFUntyped(TheoryStockAndFlowF, index=[:is,:os,:ifn,:ofn,:fv,:lvs,:lvv,:lsvsv,:lsvv,:lss,:lssv,:lvsrc,:lvtgt,:lpvp,:lpvv]) <: AbstractStockAndFlowF
 const StockAndFlowF = StockAndFlowFUntyped{Symbol,Symbol,Int8}
@@ -242,6 +245,8 @@ add_Slinks!(p::AbstractStockAndFlow0,n,s,sv;kw...) = add_parts!(p,:LS,n;lss=s,ls
 # links from sum dynamic variable to dynamic varibale
 add_SVlink!(p::AbstractStockAndFlowStructure,sv,v;kw...) = add_part!(p,:LSV;lsvsv=sv,lsvv=v,kw...)
 add_SVlinks!(p::AbstractStockAndFlowStructure,n,sv,v;kw...) = add_parts!(p,:LSV,n;lsvsv=sv,lsvv=v,kw...)
+
+
 
 # return the count of each components
 """ stock count """
@@ -437,6 +442,9 @@ add_VVlinks!(p::AbstractStockAndFlowStructureF,n,vs,vt;kw...) = add_parts!(p,:LV
 
 add_Plink!(sf::AbstractStockAndFlowStructureF,p,v;kw...) = add_part!(sf,:LPV;lpvp=p,lpvv=v,kw...)
 add_Plinks!(sf::AbstractStockAndFlowStructureF,n,p,v;kw...) = add_parts!(sf,:LPV,n;lpvp=p,lpvv=v,kw...)
+
+
+
 
 
 # define the function to construct system structure diagram with function transparency: StockAndFlowStructureF
@@ -1044,7 +1052,12 @@ vectorfield(pn::Union{AbstractStockAndFlow,AbstractStockAndFlowF}) = begin
   return f
 end
 
+
+
 include("Syntax.jl")
+
+include("stockflow/StockFlowG.jl")
+
 
 include("CausalLoop.jl")
 include("SystemStructure.jl")
