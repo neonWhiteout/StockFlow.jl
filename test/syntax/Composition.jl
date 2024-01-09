@@ -17,36 +17,26 @@ import StockFlow.Syntax.Composition: interpret_composition_notation
     @test (@compose (begin # composing no stock flows returns an empty stock flow.
     end)) == empty_sf
 
-    @test (@compose (begin # composing no stock flows returns an empty stock flow.
-        ()
-    end)) == empty_sf
-
-    @test (@compose empty_sf begin
-        (sf,)
-    end) == empty_sf
+    
 
     @test (@compose A begin
-        (sf,)
     end) == A
 
     @test (@compose A B (begin
-        (sf1, sf2)
     end)) == AB # Combining without any composing
 
     @test (@compose A A  (begin
-        (sf1, sf2)
     end)) == AA
 
     @test (@compose A A (begin
-        (sf1, sf2)
-        sf1, sf2 ^ A => ()
+        A, A ^ A => ()
     end)) == A
 
     @test (@compose A B (begin
     end)) == AB
 
     @test (@compose B B A (begin
-        (B1, B2)
+
         B1, B2 ^ B => ()
         end)) == BA
 
