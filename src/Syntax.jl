@@ -292,7 +292,6 @@ function stock_and_flow_syntax_to_arguments(syntax_elements::StockAndFlowBlock)
   return StockAndFlowArguments(stocks, params, vcat(dyvars, flow_dyvars), flows, sums)
 end
 
-
 """
     parse_stock!(stocks :: Vector{Symbol}, stock :: Symbol)
 
@@ -309,8 +308,16 @@ work is currently done by this function.
 None. This mutates the given stocks vector.
 """
 function parse_stock!(stocks::Vector{Symbol}, stock::Symbol)
-  push!(stocks, stock)
+    push!(stocks, parse_stock(stock))
 end
+
+"""
+    parse_stock(stock :: Symbol)
+"""
+function parse_stock(stock::Symbol)
+    stock
+end
+
 
 """
     parse_param!(params :: Vector{Symbol}, param :: Symbol)
@@ -331,6 +338,9 @@ function parse_param!(params::Vector{Symbol}, param::Symbol)
   push!(params, param)
 end
 
+function parse_param(param::Symbol)
+    param
+end
 """
      is_recursive_dyvar(dyvar_name :: Symbol, dyvar_def :: Expr)
 
@@ -367,18 +377,21 @@ parsed dynamic variables.
 None. This mutates the given dyvars vector.
 """
 function parse_dyvar!(dyvars::Vector{Tuple{Symbol,Expr}}, dyvar::Expr)
-  @match dyvar begin
-    :($dyvar_name = $dyvar_def) =>
-      if !is_recursive_dyvar(dyvar_name, dyvar_def)
-        push!(dyvars, (dyvar_name, dyvar_def))
-      else
-        error("Recursive dyvar detected in Symbol: " * String(dyvar_name))
-      end
-    Expr(c, _, _) || Expr(c, _, _, _) =>
-      error("Unhandled expression in dynamic variable definition " * String(c))
-  end
-end
-
+    push!(dyvars, parse_dyvar(dyvar))
+ end
+ 
+ function parse_dyvar(dyvar::Expr)
+     @match dyvar begin
+         :($dyvar_name = $dyvar_def) =>
+             if !is_recursive_dyvar(dyvar_name, dyvar_def)
+                 return (dyvar_name, dyvar_def)
+             else
+                 error("Recursive dyvar detected in Symbol: " * String(dyvar_name))
+             end
+         Expr(c, _, _) || Expr(c, _, _, _) =>
+             error("Unhandled expression in dynamic variable definition " * String(c))
+     end
+ end
 """
     parse_flow_io(flow_definition :: Expr)
 
@@ -435,6 +448,7 @@ function parse_flow!(flows::Vector{Tuple{Symbol,Expr,Symbol}}, flow::Expr)
   push!(flows, parsed_flow)
 end
 
+
 """
     parse_sum!(sums :: Vector{Tuple{Symbol, Vector{Symbol}}}, sum :: Expr)
 
@@ -450,12 +464,17 @@ the form `SUM_NAME = [STOCK_1, STOCK_2, STOCK_3, ...]`
 None. This mutates the given sums vector.
 """
 function parse_sum!(sums::Vector{Tuple{Symbol,Vector{Symbol}}}, sum::Expr)
-  @match sum begin
-    :($sum_name = $equation) => push!(sums, (sum_name, equation.args))
-    Expr(c, _, _) || Expr(c, _, _, _) =>
-      error("Unhandled expression in sum defintion " * String(c))
-  end
+    push!(sums, parse_sum(sum))
 end
+
+function parse_sum(sum::Expr)
+    @match sum begin
+        :($sum_name = $equation) => return (sum_name, equation.args)
+        Expr(c, _, _) || Expr(c, _, _, _) =>
+            error("Unhandled expression in sum defintion " * String(c))
+    end
+end
+
 
 """
     assemble_stock_definitions( stocks::Vector{Symbol}
@@ -1252,8 +1271,37 @@ function substitute_symbols(s::Dict{Symbol, Int}, t::Dict{Symbol, Int}, m::Vecto
 end
 
 """
-Takes any arguments and returns nothing. Used so we can maintain equality when
-making ACSetTransformations.
+Converts a stock flow into a stock flow block.
+Could be different from the initial definition, since this creates flows of form f(v), whereas it might've originally been of the form f(A + B)
+Ultimate stock flow created will be the same, though.  That is, sf(block(s)) == s
+"""
+function sf_to_block(sf::AbstractStockAndFlowF)
+    stocks = snames(sf)
+    params = pnames(sf)
+    sums = Vector{Tuple{Symbol, Vector{Symbol}}}([(svname, collect(map(x -> sname(sf, x), stockssv(sf, i)))) for (i, svname) ∈ enumerate(svnames(sf))])
+    dyvars = Vector{Tuple{Symbol, Expr}}([(vname, make_v_expr_nonrecursive(sf, i)) for (i, vname) ∈ enumerate(vnames(sf))])
+    flows = [(sname(sf, outstock(sf,i)), :($fname($(vname(sf, fv(sf, i))))), (sname(sf, instock(sf, i)))) for (i, fname) ∈ enumerate(fnames(sf))]
+    newsums = [(s1, isempty(vec) ? [] : vec) for (s1, vec) ∈ sums]
+    newflows = [((isempty(inflow) ? :F_NONE : inflow[1]), flow, (isempty(out) ? :F_NONE : out[1])) for (inflow, flow, out) ∈ flows]
+    s = StockAndFlowBlock(stocks, params, dyvars, newflows, newsums)
+    return s;
+end
+
+
+
+"""
+Convert a vector of unique elements to a dictionary with each element pointing to their original index.
+"""
+function invert_vector(v::Vector{K})::Dict{K, Int} where {K} # Elements of v must be hashable
+    new_dict = Dict(val => i for (i, val) ∈ enumerate(v))
+    @assert length(new_dict) == length(v) "Nonunique key in vector v: $v"
+    return new_dict
+end
+
+
+"""
+Takes any arguments and returns nothing.
+Used so we can maintain equality when making ACSetTransformations.
 """
 NothingFunction(x...)::Nothing = nothing;
 
@@ -1316,10 +1364,10 @@ end
 
 include("syntax/Composition.jl")
 include("syntax/Stratification.jl")
-include("syntax/Homomorphism.jl")
+include("syntax/Rewrite.jl")
 
 end
-
+ 
 
 
 
