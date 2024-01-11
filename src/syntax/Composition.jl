@@ -90,38 +90,46 @@ once.
 function sfcompose(sfs::Vector{K}, block::Expr) where {K <: AbstractStockAndFlowF}#(sf1, sf2, ..., block)
 
   Base.remove_linenums!(block)
-  sf_names = block.args[1].args
-  
-  if length(sfs) == 0 # Composing 0 stock flows should give you an empty stock flow
-    return StockAndFlowF()
+  if length(sfs) == 0
+      return StockAndFlowF()
   end
 
-  @assert length(sf_names) == length(sfs) "The number of symbols on the first \
-    line is not the same as the number of stock flow arguments provided.  \
-    Stockflow #: $(length(sfs)) Symbol #: $(length(sf_names))"
-  @assert allunique(sf_names) "Not all choices of names for stock flows are unique!"
+  if length(block.args) == 0 # equivalent to coproduct
+      # If sf_names is empty, there can't be any arguments after it.
+      sf_names = [gensym() for _ in 1:length(sfs)]
+  else
+      sf_names = block.args[1].args
+  end
 
+  # If the tuple of aliases is smaller than 
+  if length(sf_names) < length(sfs)
+      len_diff = length(sfs) - length(sf_names)
+      append!(sf_names, [gensym() for _ in 1:len_diff])
+  end
+
+
+  @assert allunique(sf_names) "Not all choices of names for stock flows \
+  are unique!"
 
   empty_foot =  (@foot () => ())
 
 
-  # symbol representation of sf => (sf itself, sf's feet) Every sf has empty
-  # foot as first foot to get around being unable to create OpenStockAndFlowF
-  # without feet
-  (sf_map::Dict{Symbol, Tuple{AbstractStockAndFlowF, Vector{StockAndFlow0}}} 
-    = Dict(sf_names[i] => (sfs[i], [empty_foot]) for i ∈ eachindex(sf_names))) 
-    # map the symbols to their corresponding stockflows
-  
+  # symbol representation of sf => (sf itself, sf's feet)
+  # Every sf has empty foot as first foot to get around being unable to create OpenStockAndFlowF without feet
+  sf_map::Dict{Symbol, Tuple{AbstractStockAndFlowF, Vector{StockAndFlow0}}} = 
+      Dict(sf_names[i] => (sfs[i], [empty_foot]) for i ∈ eachindex(sf_names)) # map the symbols to their corresponding stockflows
+
   # all feet
   feet_index_dict::Dict{StockAndFlow0, Int} = Dict(empty_foot => 1)
   for statement in block.args[2:end]
     stockflows, foot = interpret_composition_notation(statement)
     # adding new foot to list
-    @assert (foot ∉ keys(feet_index_dict)) "Foot has already been used, or you are using an empty foot!"
+    @assert (foot ∉ keys(feet_index_dict)) "Foot has already been used,\
+      or you are using an empty foot!"
     push!(feet_index_dict, foot => length(feet_index_dict) + 1)
     for stockflow in stockflows
-      # adding this foot to each stock flow to its left
-      push!(sf_map[stockflow][2], foot)
+        # adding this foot to each stock flow to its left
+        push!(sf_map[stockflow][2], foot)
     end
   end
 
@@ -130,10 +138,19 @@ function sfcompose(sfs::Vector{K}, block::Expr) where {K <: AbstractStockAndFlow
 
   Port = Vector{Tuple{Int, Int}}()
 
+    # for each (alias, (sf, sf's feet)) 
+    #   for each foot in sf's feet
+    #       grab the index of a foot
+    #       grab the index of alias
+    #       push (alias index, foot index) to port
+
+
+
+
   for (k, v) ∈ sf_map # TODO: Just find a better way to do this.
-    for foot ∈ v[2]
-      push!(Port, (findfirst(x -> x == k, sf_names), feet_index_dict[foot]))
-    end
+      for foot ∈ v[2]
+          push!(Port, (findfirst(x -> x == k, sf_names), feet_index_dict[foot]))
+      end
   end
 
   Junction::Vector{Symbol} = [gensym() for _ ∈ 1:length(feet_index_dict)]
@@ -162,7 +179,8 @@ Compose models.
 """
 macro compose(args...)
   if length(args) == 0
-    return :(MethodError("No arguments provided!  Please provide some number of stockflows, then a quote block."))
+    return :(MethodError("No arguments provided!  Please provide some \
+    number of stockflows, then a quote block."))
   end
   escaped_block = Expr(:quote, args[end])
   sfs = esc.(args[1:end-1])
