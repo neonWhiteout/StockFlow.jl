@@ -19,17 +19,6 @@ using AlgebraicRewriting: rewrite
 using MLStyle
 using MLStyle.Modules.AST
 
-"""
-Convert a stockflow block to a stockflow
-"""
-function block_to_sf(block)
-  args = stock_and_flow_syntax_to_arguments(block)
-  sf = StockAndFlowF(args.stocks, args.params,  
-    map(kv -> kv.first => StockFlow.Syntax.get(kv.second), args.dyvars), 
-    args.flows, args.sums)
-  return sf
-end
-
 
 struct SFPointer
   type::Symbol
