@@ -1386,6 +1386,7 @@ Used so we can maintain equality when making ACSetTransformations.
 NothingFunction(x...)::Nothing = nothing;
 
 
+
 """
 StockAndFlowBlock -> StockAndFlowUArguments
 """
@@ -1577,6 +1578,67 @@ function causal_loop_macro(block)
   end
 
   return CausalLoopF(nodes, edges, polarities)
+
+end
+
+function match_cl_format(statement, nodes, edges, polarities)
+    @match statement begin
+            :($A => !$B) => begin
+            # :($A => Expr(:quote, :(! $B))) => begin
+              push!(nodes, A, B)
+              push!(edges, A => B)
+              push!(polarities, POL_ZERO)
+            end
+            :($A => - $B) => begin
+              push!(nodes, A, B)
+              push!(edges, A => B)
+              push!(polarities, POL_BALANCING)
+            end
+            :($A => + $B) => begin
+              push!(nodes, A, B)
+
+              push!(edges, A => B)
+              push!(polarities, POL_REINFORCING)
+            end
+            :($A => ~ $B) => begin
+            push!(nodes, A, B)
+
+              push!(edges, A => B)
+              push!(polarities, POL_UNKNOWN)
+            end
+            :($A => ± $B) => begin
+            push!(nodes, A, B)
+
+              push!(edges, A => B)
+              push!(polarities, POL_NOT_WELL_DEFINED)
+            end
+            :($A) => begin
+            push!(nodes, A)
+        end
+    end
+end
+
+
+function cl_macro(block)
+
+    if block isa Symbol
+        return CausalLoopF(Vector{Symbol}([block]), Vector{Int}([]), Vector{Polarity}([]))
+    end
+
+    edges = Vector{Pair{Symbol, Symbol}}()
+    nodes = Vector{Symbol}()
+    polarities = Vector{Polarity}()
+
+    @match block.head begin
+        :tuple => begin
+            for statement in block.args
+                match_cl_format(statement, nodes, edges, polarities)
+            end
+        end
+        :call => match_cl_format(block, nodes, edges, polarities)
+    end
+        
+    return CausalLoopF(unique(nodes), edges, polarities)
 
 end
 
