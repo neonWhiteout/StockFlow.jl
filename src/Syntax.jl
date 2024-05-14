@@ -1346,9 +1346,35 @@ macro causal_loop(block)
 end
 
 
+"""
+Convert a stockflow block to a stockflow
+"""
+function block_to_sf(block)
+  args = stock_and_flow_syntax_to_arguments(block)
+  sf = StockAndFlowF(args.stocks, args.params,  
+    map(kv -> kv.first => StockFlow.Syntax.get(kv.second), args.dyvars), 
+    args.flows, args.sums)
+  return sf
+end
 
 
+"""
+Given a stockflow with some identical fields, creates a new stockflow with only one copy.
+Won't work if, for instance, v1 = A + B and v1 = C + D, as the v1s aren't identical.
+"""
+function merge_duplicates(sf)
+    
+    sfblock = sf_to_block(sf)
 
+    unique!(sfblock.stocks)
+    unique!(sfblock.params)
+    unique!(sfblock.dyvars)
+    unique!(sfblock.flows)
+    unique!(sfblock.sums)
+
+    return block_to_sf(sfblock)
+
+end
 
 
 
