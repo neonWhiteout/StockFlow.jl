@@ -130,6 +130,7 @@ end
   V::Ob
   LV::Ob
   LSV::Ob
+  
 
 
 # TODO: should give constrains that make the ifn and ofn to be monomorphisms!!
@@ -210,6 +211,70 @@ end
 @abstract_acset_type AbstractStockAndFlowF <: AbstractStockAndFlowStructureF
 @acset_type StockAndFlowFUntyped(TheoryStockAndFlowF, index=[:is,:os,:ifn,:ofn,:fv,:lvs,:lvv,:lsvsv,:lsvv,:lss,:lssv,:lvsrc,:lvtgt,:lpvp,:lpvv]) <: AbstractStockAndFlowF
 const StockAndFlowF = StockAndFlowFUntyped{Symbol,Symbol,Int8}
+
+
+
+@present TheoryStockAndFlowPol <: TheoryStockAndFlow0 begin
+  F::Ob
+  I::Ob
+  O::Ob
+
+  ifn::Hom(I,F)
+  is::Hom(I,S)
+  ofn::Hom(O,F)
+  os::Hom(O,S)
+
+  P::Ob
+
+  Add::Ob
+
+  Sub::Ob
+
+  Times::Ob
+
+  Re::Ob
+  LROut::Ob
+  Bal::Ob
+  LBOut::Ob
+
+  Out::Ob
+
+
+  la::Hom(Add, Re)
+  ra::Hom(Add, Re)
+
+  ls::Hom(Sub, Re)
+  rs::Hom(Sub, Bal)
+
+  lt::Hom(Times, Re)
+  rt::Hom(Times, Re)
+
+  lroutre::Hom(LROut, Re)
+  lroutout::Hom(LROut, Out)
+
+  lboutbal::Hom(LBOut, Bal)
+  lboutout::Hom(LBOut, Out)
+
+  sout::Hom(Sub, Out)
+  svout::Hom(SV, Out)
+  fout::Hom(F, Out)
+  pout::Hom(P, Out)
+
+  aout::Hom(Add, Out)
+  suout::Hom(Sub, Out)
+  tout::Hom(Times, Out)
+
+  fname::Attr(F, Name)
+  pname::Attr(P, Name)
+
+  outname::Attr(Out, Name)
+
+end
+@abstract_acset_type AbstractStockAndFlowPol <: AbstractStockAndFlow0
+@acset_type StockAndFlowUntypedPol(TheoryStockAndFlowPol, index=[:is,:os,:ifn,:ofn, :la, :ra, :ls, :rs, :lt, :rt, :lroutre, :lroutout, :lboutbal, :lboutout, 
+  :sout, :svout, :fout, :pout, :aout, :suout, :tout,    :lss,:lssv]) <: AbstractStockAndFlowPol
+const StockAndFlowPol = StockAndFlowUntypedPol
+
 
 # functions of adding components of the model schema
 add_flow!(p::AbstractStockAndFlowStructure,v;kw...) = add_part!(p,:F;fv=v,kw...)
